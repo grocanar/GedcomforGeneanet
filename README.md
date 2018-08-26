@@ -12,6 +12,8 @@ Ce greffon est une "amélioration" de l'export gedcom de Geneanet. Il apporte le
 * Offuscation des sources généanet
 * Suppression des chemins absolus dans le chemin des fichiers
 * Suppression de l'attribut "ID Gramps fusionné"
+* Ajout de la qualité des sources dans la description des sources
+* Création d'une archive zip des médias concernés
 
 ## Installation
 
