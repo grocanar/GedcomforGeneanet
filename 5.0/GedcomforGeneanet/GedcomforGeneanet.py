@@ -38,15 +38,15 @@ import io
 # GTK modules
 #
 #------------------------------------------------------------------------
-from gramps.version import VERSION
 from gi.repository import Gtk
 import gramps.plugins.lib.libgedcom as libgedcom
 from gramps.plugins.export import exportgedcom
 from gramps.gui.plug.export import WriterOptionBox
 from gramps.gen.errors import DatabaseError
-from gramps.gen.lib import (EventRoleType, FamilyRelType, Citation , EventType, Person, AttributeType , NoteType)
+from gramps.gen.lib import (EventRoleType, FamilyRelType, Citation, EventType,\
+ Person, AttributeType, NameType, NoteType)
 from gramps.gen.const import GRAMPS_LOCALE as glocale
-from gramps.gen.utils.file import media_path_full,media_path,relative_path
+from gramps.gen.utils.file import media_path_full, media_path, relative_path
 try:
     _trans = glocale.get_addon_translator(__file__)
 except ValueError:
@@ -54,6 +54,7 @@ except ValueError:
 _ = _trans.gettext
 import zipfile
 import logging
+from gramps.version import VERSION
 LOG = logging.getLogger("gedcomforgeneanet")
 
 
@@ -67,13 +68,13 @@ MIME2GED = {
     }
 
 LANGUAGES = {
-    'cs' : 'Czech',     'da' : 'Danish',    'nl' : 'Dutch',
-    'en' : 'English',   'eo' : 'Esperanto', 'fi' : 'Finnish',
-    'fr' : 'French',    'de' : 'German',    'hu' : 'Hungarian',
-    'it' : 'Italian',   'lt' : 'Latvian',   'lv' : 'Lithuanian',
-    'no' : 'Norwegian', 'po' : 'Polish',    'pt' : 'Portuguese',
-    'ro' : 'Romanian',  'sk' : 'Slovak',    'es' : 'Spanish',
-    'sv' : 'Swedish',   'ru' : 'Russian',
+    'cs' : 'Czech', 'da' : 'Danish','nl' : 'Dutch',
+    'en' : 'English','eo' : 'Esperanto', 'fi' : 'Finnish',
+    'fr' : 'French', 'de' : 'German', 'hu' : 'Hungarian',
+    'it' : 'Italian', 'lt' : 'Latvian', 'lv' : 'Lithuanian',
+    'no' : 'Norwegian', 'po' : 'Polish', 'pt' : 'Portuguese',
+    'ro' : 'Romanian', 'sk' : 'Slovak', 'es' : 'Spanish',
+    'sv' : 'Swedish', 'ru' : 'Russian',
     }
 
 QUALITY_MAP = {
@@ -91,9 +92,9 @@ QUALITY_MAP = {
 #-------------------------------------------------------------------------
 def sort_handles_by_id(handle_list, handle_to_object):
     """
-    Sort a list of handles by the Gramps ID. 
+    Sort a list of handles by the Gramps ID.
     
-    The function that returns the object from the handle needs to be supplied 
+    The function that returns the object from the handle needs to be supplied
     so that we get the right object.
     
     """
@@ -102,7 +103,7 @@ def sort_handles_by_id(handle_list, handle_to_object):
         obj = handle_to_object(handle)
         if obj:
             data = (obj.get_gramps_id(), handle)
-            sorted_list.append (data)
+            sorted_list.append(data)
     sorted_list.sort()
     return sorted_list
 
@@ -123,6 +124,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.geneanet_obsc = option_box.geneanet_obsc
             self.quaynote = option_box.quaynote
             self.zip = option_box.zip
+            self.namegen = option_box.namegen
         else:
             self.include_witnesses = 1
             self.include_media = 1
@@ -131,6 +133,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.relativepath = 0
             self.quaynote = 0
             self.zip = 0
+            self.namegen = 0
         self.zipfile = None
 
     def get_filtered_database(self, dbase, progress=None, preview=False):
@@ -183,7 +186,112 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
 
 
 
-    
+    def _names(self, person):
+        """
+        Write the names associated with the person to the current level.
+
+        Since nicknames in version < 3.3 are separate from the name structure,
+        we search the attribute list to see if we can find a nickname.
+        Because we do not know the mappings, we just take the first nickname
+        we find, and add it to the primary name.
+        If a nickname is present in the name structure, it has precedence
+
+        """
+        nicknames = [attr.get_value() for attr in person.get_attribute_list()
+                     if int(attr.get_type()) == AttributeType.NICKNAME]
+        if len(nicknames) > 0:
+            nickname = nicknames[0]
+        else:
+            nickname = ""
+
+        self._person_name(person.get_primary_name(), nickname)
+            
+        for name in person.get_alternate_names():
+            self._person_altname(name, "")
+
+    def _person_altname(self, name, attr_nick):
+        """
+        n NAME <NAME_PERSONAL> {1:1}
+        +1 NPFX <NAME_PIECE_PREFIX> {0:1}
+        +1 GIVN <NAME_PIECE_GIVEN> {0:1}
+        +1 NICK <NAME_PIECE_NICKNAME> {0:1}
+        +1 SPFX <NAME_PIECE_SURNAME_PREFIX {0:1}
+        +1 SURN <NAME_PIECE_SURNAME> {0:1}
+        +1 NSFX <NAME_PIECE_SUFFIX> {0:1}
+        +1 <<SOURCE_CITATION>> {0:M}
+        +1 <<NOTE_STRUCTURE>> {0:M}
+        """
+        if self.namegen:
+            gedcom_name = self.get_genegedcom_name(name)
+        else:
+            gedcom_name = self.get_gedcom_name(name)
+
+        firstname = name.get_first_name().strip()
+        surns = []
+        surprefs = []
+        for surn in name.get_surname_list():
+            surns.append(surn.get_surname().replace('/', '?'))
+            if surn.get_connector():
+                #we store connector with the surname
+                surns[-1] = surns[-1] + ' ' + surn.get_connector()
+            surprefs.append(surn.get_prefix().replace('/', '?'))
+        surname = ', '.join(surns)
+        surprefix = ', '.join(surprefs)
+        suffix = name.get_suffix()
+        title = name.get_title()
+        nick = name.get_nick_name()
+        if nick.strip() == '':
+            nick = attr_nick
+
+        self._writeln(1, 'NAME', gedcom_name)
+        if int(name.get_type()) == NameType.BIRTH:
+            pass
+        elif int(name.get_type()) == NameType.MARRIED:
+            self._writeln(2, 'TYPE', 'married')
+        elif int(name.get_type()) == NameType.AKA:
+            self._writeln(2, 'TYPE', 'aka')
+        else:
+            self._writeln(2, 'TYPE', name.get_type().xml_str())
+
+        if firstname:
+            self._writeln(2, 'GIVN', firstname)
+        if surprefix:
+            self._writeln(2, 'SPFX', surprefix)
+        if surname:
+            self._writeln(2, 'SURN', surname)
+        if name.get_suffix():
+            self._writeln(2, 'NSFX', suffix)
+        if name.get_title():
+            self._writeln(2, 'NPFX', title)
+        if nick:
+            self._writeln(2, 'NICK', nick)
+
+        self._source_references(name.get_citation_list(), 2)
+        self._note_references(name.get_note_list(), 2)
+
+
+    def get_genegedcom_name(self,name):
+        """
+        Returns a GEDCOM-formatted name.
+        """
+        firstname = name.first_name.strip()
+        surname = name.get_surname().replace('/', '?')
+        suffix = name.suffix
+        if suffix == "":
+            return '%s %s' % (firstname, surname)
+        return '%s %s %s' % (firstname, surname, suffix)
+
+    def get_gedcom_name(self,name):
+        """
+        Returns a GEDCOM-formatted name.
+        """
+        firstname = name.first_name.strip()
+        surname = name.get_surname().replace('/', '?')
+        suffix = name.suffix
+        if suffix == "":
+            return '%s /%s/' % (firstname, surname)
+        return '%s /%s/ %s' % (firstname, surname, suffix)
+
     def _photo(self, photo, level):
         """
         Overloaded media-handling method to skip over media
@@ -319,8 +427,6 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             event = self.dbase.get_event_from_handle(event_ref.ref)
             etype = int(event.get_type())
             devel = 2
-#            self._writeln(devel , "DEBUG NAISS OR DEATH TYPE", "@%s@" % etype)
-#            self._writeln(devel , "DEBUG NAISS OR DEATH ROLE", "@%s@" % role)
             for (objclass, handle) in self.dbase.find_backlink_handles(
                 event.handle, ['Person']):
                 person = self.dbase.get_person_from_handle(handle)
@@ -338,9 +444,9 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
 
     def _process_person_event(self, person ,event ,event_ref):
         """
-        Write the witnesses associated with other personnal event. 
+        Write the witnesses associated with other personnal event.
         """
-        super(GedcomWriterforGeneanet, self)._process_person_event(person , event , event_ref)
+        super(GedcomWriterforGeneanet, self)._process_person_event(person, event , event_ref)
         etype = int(event.get_type())
         # if the event is a birth or death, skip it.
         if etype in (EventType.BIRTH, EventType.DEATH, EventType.MARRIAGE):
@@ -413,7 +519,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             
         # filter out the nicknames
         attr_list = [attr for attr in person.get_attribute_list()
-                      if attr.get_type() != AttributeType.NICKNAME]
+                     if attr.get_type() != AttributeType.NICKNAME]
 
         for attr in attr_list:
 
@@ -434,7 +540,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             if name and name.strip():
                 self._writeln(1, name, value)
             elif value:
-                if not key == "ID Gramps fusionné":
+                if key != "ID Gramps fusionné":
 #pylint: disable=maybe-no-member
                     self._writeln(1, 'FACT', value)
                     self._writeln(2, 'TYPE', key)
@@ -445,36 +551,36 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
 
     def _header(self, filename):
         """
-        Write the GEDCOM header. 
+        Write the GEDCOM header.
 
             HEADER:=
             n HEAD {1:1}
-            +1 SOUR <APPROVED_SYSTEM_ID> {1:1} 
-            +2 VERS <VERSION_NUMBER> {0:1} 
-            +2 NAME <NAME_OF_PRODUCT> {0:1} 
+            +1 SOUR <APPROVED_SYSTEM_ID> {1:1}
+            +2 VERS <VERSION_NUMBER> {0:1}
+            +2 NAME <NAME_OF_PRODUCT> {0:1}
             +2 CORP <NAME_OF_BUSINESS> {0:1}           # Not used
             +3 <<ADDRESS_STRUCTURE>> {0:1}             # Not used
             +2 DATA <NAME_OF_SOURCE_DATA> {0:1}        # Not used
             +3 DATE <PUBLICATION_DATE> {0:1}           # Not used
             +3 COPR <COPYRIGHT_SOURCE_DATA> {0:1}      # Not used
             +1 DEST <RECEIVING_SYSTEM_NAME> {0:1*}     # Not used
-            +1 DATE <TRANSMISSION_DATE> {0:1} 
-            +2 TIME <TIME_VALUE> {0:1} 
-            +1 SUBM @XREF:SUBM@ {1:1} 
-            +1 SUBN @XREF:SUBN@ {0:1} 
-            +1 FILE <FILE_NAME> {0:1} 
-            +1 COPR <COPYRIGHT_GEDCOM_FILE> {0:1} 
+            +1 DATE <TRANSMISSION_DATE> {0:1}
+            +2 TIME <TIME_VALUE> {0:1}
+            +1 SUBM @XREF:SUBM@ {1:1}
+            +1 SUBN @XREF:SUBN@ {0:1}
+            +1 FILE <FILE_NAME> {0:1}
+            +1 COPR <COPYRIGHT_GEDCOM_FILE> {0:1}
             +1 GEDC {1:1}
-            +2 VERS <VERSION_NUMBER> {1:1} 
-            +2 FORM <GEDCOM_FORM> {1:1} 
-            +1 CHAR <CHARACTER_SET> {1:1} 
-            +2 VERS <VERSION_NUMBER> {0:1} 
-            +1 LANG <LANGUAGE_OF_TEXT> {0:1} 
+            +2 VERS <VERSION_NUMBER> {1:1}
+            +2 FORM <GEDCOM_FORM> {1:1}
+            +1 CHAR <CHARACTER_SET> {1:1}
+            +2 VERS <VERSION_NUMBER> {0:1}
+            +1 LANG <LANGUAGE_OF_TEXT> {0:1}
             +1 PLAC {0:1}
-            +2 FORM <PLACE_HIERARCHY> {1:1} 
-            +1 NOTE <GEDCOM_CONTENT_DESCRIPTION> {0:1} 
+            +2 FORM <PLACE_HIERARCHY> {1:1}
+            +1 NOTE <GEDCOM_CONTENT_DESCRIPTION> {0:1}
             +2 [CONT|CONC] <GEDCOM_CONTENT_DESCRIPTION> {0:M}
-        
+
         """
         local_time = time.localtime(time.time())
         (year, mon, day, hour, minutes, sec) = local_time[0:6]
@@ -484,7 +590,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
         LOG.debug("deb header %d" % self.relativepath)
         self._writeln(0, "HEAD")
         self._writeln(1, "SOUR", "Gramps")
-        self._writeln(2, "VERS",  VERSION)
+        self._writeln(2, "VERS", VERSION)
         self._writeln(2, "NAME", "Gramps")
         self._writeln(1, "DATE", date_str)
         self._writeln(2, "TIME", time_str)
@@ -535,19 +641,19 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
          
         if self.quaynote:
             if conf == Citation.CONF_VERY_HIGH:
-                self._writeln(level +1 ,"DATA")
+                self._writeln(level +1, "DATA")
                 self._writeln(level +2, "NOTE", _("Very High Quality Source"))
             elif conf == Citation.CONF_HIGH:
-                self._writeln(level +1 ,"DATA")
+                self._writeln(level +1, "DATA")
                 self._writeln(level +2, "NOTE", _("High Quality Source"))
             elif conf == Citation.CONF_NORMAL:
-                self._writeln(level +1 ,"DATA")
+                self._writeln(level +1, "DATA")
                 self._writeln(level +2, "NOTE", _("Normal Quality Source"))
             elif conf == Citation.CONF_LOW:
-                self._writeln(level +1 ,"DATA")
+                self._writeln(level +1, "DATA")
                 self._writeln(level +2, "NOTE", _("Low Quality Source"))
-            elif conf == Citation.CONF_VERYLOW:
-                self._writeln(level +1 ,"DATA")
+            elif conf == Citation.CONF_VERY_LOW:
+                self._writeln(level +1, "DATA")
                 self._writeln(level +2, "NOTE", _("Very Low Quality Source"))
         if  conf != -1:
             self._writeln(level + 1, "QUAY", QUALITY_MAP[conf])
@@ -592,9 +698,6 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
                 if str(srcattr.type) == "EVEN:ROLE":
                     self._writeln(level + 2, "ROLE", srcattr.value)
                     break
-
-
-
 
     def write_gedcom_file(self, filename):
         """
@@ -654,6 +757,8 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.quaynote_check = None
         self.zip = 0
         self.zip_check = None
+        self.namegen = 0
+        self.namegen_check = None
 
     def get_option_box(self):
         option_box = super(GedcomWriterOptionBox, self).get_option_box()
@@ -665,13 +770,15 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.geneanet_obsc_check = Gtk.CheckButton(_("Geneanet obscufucation"))
         self.quaynote_check = Gtk.CheckButton(_("Export Source Quality"))
         self.zip_check = Gtk.CheckButton(_("Create a zip of medias"))
+        self.namegen_check = Gtk.CheckButton(_("Geneanet name beautify"))
         self.include_witnesses_check.set_active(1)
         self.include_media_check.set_active(1)
         self.include_depot_check.set_active(1)
         self.relativepath_check.set_active(0)
         self.geneanet_obsc_check.set_active(0)
-        self.quaynote_check.set_active(0)
+        self.quaynote_check.set_active(1)
         self.zip_check.set_active(0)
+        self.namegen_check.set_active(0)
 
         # Add to gui:
         option_box.pack_start(self.include_witnesses_check, False, False, 0)
@@ -681,6 +788,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         option_box.pack_start(self.geneanet_obsc_check, False, False, 0)
         option_box.pack_start(self.quaynote_check, False, False, 0)
         option_box.pack_start(self.zip_check, False, False, 0)
+        option_box.pack_start(self.namegen_check, False, False, 0)
         return option_box
 
     def parse_options(self):
@@ -702,6 +810,8 @@ class GedcomWriterOptionBox(WriterOptionBox):
             self.quaynote = self.quaynote_check.get_active()
         if self.zip_check:
             self.zip = self.zip_check.get_active()
+        if self.namegen_check:
+            self.namegen = self.namegen_check.get_active()
 
 def export_data(database, filename, user, option_box=None):
     """
