@@ -125,6 +125,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.quaynote = option_box.quaynote
             self.zip = option_box.zip
             self.namegen = option_box.namegen
+            self.anychar = option_box.anychar
         else:
             self.include_witnesses = 1
             self.include_media = 1
@@ -134,6 +135,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.quaynote = 0
             self.zip = 0
             self.namegen = 0
+            self.anychar = 1
         self.zipfile = None
 
     def get_filtered_database(self, dbase, progress=None, preview=False):
@@ -209,6 +211,68 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
         for name in person.get_alternate_names():
             self._person_altname(name, "")
 
+    def _writeln(self, level, token, textlines="", limit=72):
+        """
+        Write a line of text to the output file in the form of:
+
+            LEVEL TOKEN text
+
+        If the line contains newlines, it is broken into multiple lines using
+        the CONT token. If any line is greater than the limit, it will broken
+        into multiple lines using CONC.
+
+        """
+        assert token
+        if textlines:
+            # break the line into multiple lines if a newline is found
+            textlines = textlines.replace('\n\r', '\n')
+            textlines = textlines.replace('\r', '\n')
+            LOG.debug("anychar %d" % self.anychar)
+            if self.anychar:
+                if not textlines.startswith('@'):  # avoid xrefs
+                    textlines = textlines.replace('@', '@@')
+            textlist = textlines.split('\n')
+            token_level = level
+            for text in textlist:
+                # make it unicode so that breakup below does the right thin.
+                text = str(text)
+                if limit:
+                    prefix = "\n%d CONC " % (level + 1)
+                    txt = prefix.join(self.breakup(text, limit))
+                else:
+                    txt = text
+                self.gedcom_file.write("%d %s %s\n" %
+                                       (token_level, token, txt))
+                token_level = level + 1
+                token = "CONT"
+        else:
+            self.gedcom_file.write("%d %s\n" % (level, token))
+
+    def breakup(self,txt, limit):
+        """
+        Break a line of text into a list of strings that conform to the
+        maximum length specified, while breaking words in the middle of a word
+        to avoid issues with spaces.
+        """
+        if limit < 1:
+            raise ValueError("breakup: unexpected limit: %r" % limit)
+        data = []
+        while len(txt) > limit:
+            # look for non-space pair to break between
+            # do not break within a UTF-8 byte sequence, i. e. first char >127
+            idx = limit
+            while (idx > 0 and (txt[idx - 1].isspace() or txt[idx].isspace() or
+                            ord(txt[idx - 1]) > 127)):
+                idx -= 1
+            if idx == 0:
+                #no words to break on, just break at limit anyway
+                idx = limit
+            data.append(txt[:idx])
+            txt = txt[idx:]
+        if len(txt) > 0:
+            data.append(txt)
+        return data
+ 
     def _person_altname(self, name, attr_nick):
         """
         n NAME <NAME_PERSONAL> {1:1}
@@ -759,6 +823,8 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.zip_check = None
         self.namegen = 0
         self.namegen_check = None
+        self.anychar = 1
+        self.anychar_check = None
 
     def get_option_box(self):
         option_box = super(GedcomWriterOptionBox, self).get_option_box()
@@ -771,6 +837,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.quaynote_check = Gtk.CheckButton(_("Export Source Quality"))
         self.zip_check = Gtk.CheckButton(_("Create a zip of medias"))
         self.namegen_check = Gtk.CheckButton(_("Geneanet name beautify"))
+        self.anychar_check = Gtk.CheckButton(_("Implementation of anychar"))
         self.include_witnesses_check.set_active(1)
         self.include_media_check.set_active(1)
         self.include_depot_check.set_active(1)
@@ -779,6 +846,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.quaynote_check.set_active(1)
         self.zip_check.set_active(0)
         self.namegen_check.set_active(0)
+        self.anychar_check.set_active(1)
 
         # Add to gui:
         option_box.pack_start(self.include_witnesses_check, False, False, 0)
@@ -789,6 +857,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         option_box.pack_start(self.quaynote_check, False, False, 0)
         option_box.pack_start(self.zip_check, False, False, 0)
         option_box.pack_start(self.namegen_check, False, False, 0)
+        option_box.pack_start(self.anychar_check, False, False, 0)
         return option_box
 
     def parse_options(self):
@@ -812,6 +881,8 @@ class GedcomWriterOptionBox(WriterOptionBox):
             self.zip = self.zip_check.get_active()
         if self.namegen_check:
             self.namegen = self.namegen_check.get_active()
+        if self.anychar_check:
+            self.anychar = self.anychar_check.get_active()
 
 def export_data(database, filename, user, option_box=None):
     """
