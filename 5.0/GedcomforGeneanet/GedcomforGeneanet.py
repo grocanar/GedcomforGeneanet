@@ -55,6 +55,7 @@ _ = _trans.gettext
 import zipfile
 import logging
 from gramps.version import VERSION
+from gramps.gen.config import config
 LOG = logging.getLogger("gedcomforgeneanet")
 
 
@@ -84,6 +85,21 @@ QUALITY_MAP = {
     Citation.CONF_LOW       : "0",
     Citation.CONF_VERY_LOW  : "0",
 }
+
+GRAMPLET_CONFIG_NAME = "gedcomforgeneanet"
+CONFIG = config.register_manager("gedcomforgeneanet")
+
+CONFIG.register("preferences.include_witnesses", True)
+CONFIG.register("preferences.include_media", False)
+CONFIG.register("preferences.include_depot" , True)
+CONFIG.register("preferences.geneanet_obsc" , False)
+CONFIG.register("preferences.relativepath" , True)
+CONFIG.register("preferences.quaynote", True)
+CONFIG.register("preferences.zip", False)
+CONFIG.register("preferences.namegen" , True)
+CONFIG.register("preferences.nameus" , False)
+CONFIG.register("preferences.anychar", True)
+CONFIG.load()
 
 #-------------------------------------------------------------------------
 #
@@ -117,6 +133,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
         self.extralist = {}
         if option_box:
             # Already parsed in GedcomWriter
+            LOG.debug("dans OPTION %s")
             self.include_witnesses = option_box.include_witnesses
             self.include_media = option_box.include_media
             self.relativepath = option_box.relativepath
@@ -125,8 +142,11 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.quaynote = option_box.quaynote
             self.zip = option_box.zip
             self.namegen = option_box.namegen
+            self.nameus = option_box.nameus
             self.anychar = option_box.anychar
+            CONFIG.save()
         else:
+            LOG.debug("pas dans OPTION %s")
             self.include_witnesses = 1
             self.include_media = 1
             self.include_depot = 1
@@ -135,6 +155,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.quaynote = 0
             self.zip = 0
             self.namegen = 0
+            self.nameus = 1
             self.anychar = 1
         self.zipfile = None
 
@@ -173,7 +194,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
 
         self.proxy_dbase.clear()
         for proxy_name in self.get_proxy_names():
-            LOG.debug("proxy %s" % proxy_name)
+          #  LOG.debug("proxy %s" % proxy_name)
             dbase = self.apply_proxy(proxy_name, dbase, progress)
             if preview:
                 self.proxy_dbase[proxy_name] = dbase
@@ -227,7 +248,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             # break the line into multiple lines if a newline is found
             textlines = textlines.replace('\n\r', '\n')
             textlines = textlines.replace('\r', '\n')
-            LOG.debug("anychar %d" % self.anychar)
+          #  LOG.debug("anychar %d" % self.anychar)
             if self.anychar:
                 if not textlines.startswith('@'):  # avoid xrefs
                     textlines = textlines.replace('@', '@@')
@@ -273,6 +294,89 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             data.append(txt)
         return data
  
+    def get_usuel_first_name(self,name):
+        """
+        Returns a GEDCOM-formatted usuel name.
+        """
+
+     #   LOG.debug("on rentre dans usged")
+        call = name.get_call_name()
+        if call:
+     #       LOG.debug("on a trouve un call dans GEDCOM")
+            firstname = ""
+            listeprenom = name.first_name.split()
+            for pren in listeprenom:
+                if pren == call:
+                    pren = '"' + pren + '"'
+                if firstname:
+                    firstname = firstname + " " + pren
+                else:
+                    firstname = pren
+        else:
+            firstname = name.first_name.strip()
+        return firstname
+
+    
+    def _person_name(self, name, attr_nick):
+        """
+        n NAME <NAME_PERSONAL> {1:1}
+        +1 NPFX <NAME_PIECE_PREFIX> {0:1}
+        +1 GIVN <NAME_PIECE_GIVEN> {0:1}
+        +1 NICK <NAME_PIECE_NICKNAME> {0:1}
+        +1 SPFX <NAME_PIECE_SURNAME_PREFIX {0:1}
+        +1 SURN <NAME_PIECE_SURNAME> {0:1}
+        +1 NSFX <NAME_PIECE_SUFFIX> {0:1}
+        +1 <<SOURCE_CITATION>> {0:M}
+        +1 <<NOTE_STRUCTURE>> {0:M}
+        """
+        gedcom_name = self.get_gedcom_name(name)
+
+        if self.nameus:
+            firstname = self.get_usuel_first_name(name)
+        else:
+            firstname = name.get_first_name().strip()
+        surns = []
+        surprefs = []
+        for surn in name.get_surname_list():
+            surns.append(surn.get_surname().replace('/', '?'))
+            if surn.get_connector():
+                #we store connector with the surname
+                surns[-1] = surns[-1] + ' ' + surn.get_connector()
+            surprefs.append(surn.get_prefix().replace('/', '?'))
+        surname = ', '.join(surns)
+        surprefix = ', '.join(surprefs)
+        suffix = name.get_suffix()
+        title = name.get_title()
+        nick = name.get_nick_name()
+        if nick.strip() == '':
+            nick = attr_nick
+
+        self._writeln(1, 'NAME', gedcom_name)
+        if int(name.get_type()) == NameType.BIRTH:
+            pass
+        elif int(name.get_type()) == NameType.MARRIED:
+            self._writeln(2, 'TYPE', 'married')
+        elif int(name.get_type()) == NameType.AKA:
+            self._writeln(2, 'TYPE', 'aka')
+        else:
+            self._writeln(2, 'TYPE', name.get_type().xml_str())
+
+        if firstname:
+            self._writeln(2, 'GIVN', firstname)
+        if surprefix:
+            self._writeln(2, 'SPFX', surprefix)
+        if surname:
+            self._writeln(2, 'SURN', surname)
+        if name.get_suffix():
+            self._writeln(2, 'NSFX', suffix)
+        if name.get_title():
+            self._writeln(2, 'NPFX', title)
+        if nick:
+            self._writeln(2, 'NICK', nick)
+
+        self._source_references(name.get_citation_list(), 2)
+        self._note_references(name.get_note_list(), 2)
+    
     def _person_altname(self, name, attr_nick):
         """
         n NAME <NAME_PERSONAL> {1:1}
@@ -349,7 +453,10 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
         """
         Returns a GEDCOM-formatted name.
         """
-        firstname = name.first_name.strip()
+        if self.nameus:
+           firstname = self.get_usuel_first_name(name)
+        else:
+           firstname = name.first_name.strip()
         surname = name.get_surname().replace('/', '?')
         suffix = name.suffix
         if suffix == "":
@@ -807,23 +914,25 @@ class GedcomWriterOptionBox(WriterOptionBox):
         Initialize the local options.
         """
         super(GedcomWriterOptionBox, self).__init__(person, dbstate, uistate)
-        self.include_witnesses = 1
+        self.include_witnesses = CONFIG.get("preferences.include_witnesses")
         self.include_witnesses_check = None
-        self.include_media = 1
+        self.include_media = CONFIG.get("preferences.include_media")
         self.include_media_check = None
-        self.include_depot = 1
+        self.include_depot = CONFIG.get("preferences.include_depot")
         self.include_depot_check = None
-        self.geneanet_obsc = 0
+        self.geneanet_obsc = CONFIG.get("preferences.geneanet_obsc")
         self.geneanet_obsc_check = None
-        self.relativepath = 0
+        self.relativepath = CONFIG.get("preferences.relativepath")
         self.relativepath_check = None
-        self.quaynote = 0
+        self.quaynote = CONFIG.get("preferences.quaynote")
         self.quaynote_check = None
-        self.zip = 0
+        self.zip = CONFIG.get("preferences.zip")
         self.zip_check = None
-        self.namegen = 0
+        self.namegen = CONFIG.get("preferences.namegen")
         self.namegen_check = None
-        self.anychar = 1
+        self.nameus = CONFIG.get("preferences.nameus")
+        self.nameus_check = None
+        self.anychar = CONFIG.get("preferences.anychar")
         self.anychar_check = None
 
     def get_option_box(self):
@@ -837,16 +946,19 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.quaynote_check = Gtk.CheckButton(_("Export Source Quality"))
         self.zip_check = Gtk.CheckButton(_("Create a zip of medias"))
         self.namegen_check = Gtk.CheckButton(_("Geneanet name beautify"))
+        self.nameus_check = Gtk.CheckButton(_("Support for call name"))
         self.anychar_check = Gtk.CheckButton(_("Implementation of anychar"))
-        self.include_witnesses_check.set_active(1)
-        self.include_media_check.set_active(1)
-        self.include_depot_check.set_active(1)
-        self.relativepath_check.set_active(0)
-        self.geneanet_obsc_check.set_active(0)
-        self.quaynote_check.set_active(1)
-        self.zip_check.set_active(0)
-        self.namegen_check.set_active(0)
-        self.anychar_check.set_active(1)
+        #self.include_witnesses_check.set_active(1)
+        self.include_witnesses_check.set_active(CONFIG.get("preferences.include_witnesses"))
+        self.include_media_check.set_active(CONFIG.get("preferences.include_media"))
+        self.include_depot_check.set_active(CONFIG.get("preferences.include_depot"))
+        self.relativepath_check.set_active(CONFIG.get("preferences.relativepath"))
+        self.geneanet_obsc_check.set_active(CONFIG.get("preferences.geneanet_obsc"))
+        self.quaynote_check.set_active(CONFIG.get("preferences.quaynote"))
+        self.zip_check.set_active(CONFIG.get("preferences.zip"))
+        self.namegen_check.set_active(CONFIG.get("preferences.namegen"))
+        self.nameus_check.set_active(CONFIG.get("preferences.nameus"))
+        self.anychar_check.set_active(CONFIG.get("preferences.anychar"))
 
         # Add to gui:
         option_box.pack_start(self.include_witnesses_check, False, False, 0)
@@ -857,6 +969,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         option_box.pack_start(self.quaynote_check, False, False, 0)
         option_box.pack_start(self.zip_check, False, False, 0)
         option_box.pack_start(self.namegen_check, False, False, 0)
+        option_box.pack_start(self.nameus_check, False, False, 0)
         option_box.pack_start(self.anychar_check, False, False, 0)
         return option_box
 
@@ -881,8 +994,21 @@ class GedcomWriterOptionBox(WriterOptionBox):
             self.zip = self.zip_check.get_active()
         if self.namegen_check:
             self.namegen = self.namegen_check.get_active()
+        if self.nameus_check:
+            self.nameus = self.nameus_check.get_active()
         if self.anychar_check:
             self.anychar = self.anychar_check.get_active()
+        CONFIG.set("preferences.include_witnesses" , self.include_witnesses )
+        CONFIG.set("preferences.include_media" , self.include_media)
+        CONFIG.set("preferences.include_depot" , self.include_depot)
+        CONFIG.set("preferences.geneanet_obsc" , self.geneanet_obsc)
+        CONFIG.set("preferences.relativepath" , self.relativepath)
+        CONFIG.set("preferences.quaynote" , self.quaynote)
+        CONFIG.set("preferences.zip" , self.zip)
+        CONFIG.set("preferences.namegen" , self.namegen)
+        CONFIG.set("preferences.nameus" , self.nameus)
+        CONFIG.set("preferences.anychar" , self.anychar)
+        CONFIG.save()
 
 def export_data(database, filename, user, option_box=None):
     """
