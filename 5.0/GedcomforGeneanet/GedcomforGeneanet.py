@@ -99,6 +99,7 @@ CONFIG.register("preferences.zip", False)
 CONFIG.register("preferences.namegen" , True)
 CONFIG.register("preferences.nameus" , False)
 CONFIG.register("preferences.anychar", True)
+CONFIG.register("preferences.citattr", True)
 CONFIG.load()
 
 #-------------------------------------------------------------------------
@@ -144,6 +145,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.namegen = option_box.namegen
             self.nameus = option_box.nameus
             self.anychar = option_box.anychar
+            self.citattr = option_box.citattr
             CONFIG.save()
         else:
             LOG.debug("pas dans OPTION %s")
@@ -157,6 +159,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.namegen = 0
             self.nameus = 1
             self.anychar = 1
+            self.citattr = 1
         self.zipfile = None
 
     def get_filtered_database(self, dbase, progress=None, preview=False):
@@ -869,7 +872,11 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
                 if str(srcattr.type) == "EVEN:ROLE":
                     self._writeln(level + 2, "ROLE", srcattr.value)
                     break
-
+        if self.citattr:
+            for srcattr in citation.get_attribute_list():
+                self._writeln(level + 1, "DATA" , str(srcattr.type)) 
+                self._writeln(level + 2, "TEXT", srcattr.value)
+                
     def write_gedcom_file(self, filename):
         """
         Write the actual GEDCOM file to the specified filename.
@@ -934,6 +941,8 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.nameus_check = None
         self.anychar = CONFIG.get("preferences.anychar")
         self.anychar_check = None
+        self.citattr = CONFIG.get("preferences.citattr")
+        self.citattr_check = None
 
     def get_option_box(self):
         option_box = super(GedcomWriterOptionBox, self).get_option_box()
@@ -948,6 +957,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.namegen_check = Gtk.CheckButton(_("Geneanet name beautify"))
         self.nameus_check = Gtk.CheckButton(_("Support for call name"))
         self.anychar_check = Gtk.CheckButton(_("Implementation of anychar"))
+        self.citattr_check = Gtk.CheckButton(_("Export of attributes of citation"))
         #self.include_witnesses_check.set_active(1)
         self.include_witnesses_check.set_active(CONFIG.get("preferences.include_witnesses"))
         self.include_media_check.set_active(CONFIG.get("preferences.include_media"))
@@ -959,6 +969,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.namegen_check.set_active(CONFIG.get("preferences.namegen"))
         self.nameus_check.set_active(CONFIG.get("preferences.nameus"))
         self.anychar_check.set_active(CONFIG.get("preferences.anychar"))
+        self.citattr_check.set_active(CONFIG.get("preferences.citattr"))
 
         # Add to gui:
         option_box.pack_start(self.include_witnesses_check, False, False, 0)
@@ -971,6 +982,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         option_box.pack_start(self.namegen_check, False, False, 0)
         option_box.pack_start(self.nameus_check, False, False, 0)
         option_box.pack_start(self.anychar_check, False, False, 0)
+        option_box.pack_start(self.citattr_check, False, False, 0)
         return option_box
 
     def parse_options(self):
@@ -998,6 +1010,8 @@ class GedcomWriterOptionBox(WriterOptionBox):
             self.nameus = self.nameus_check.get_active()
         if self.anychar_check:
             self.anychar = self.anychar_check.get_active()
+        if self.citattr_check:
+            self.citattr = self.citattr_check.get_active()
         CONFIG.set("preferences.include_witnesses" , self.include_witnesses )
         CONFIG.set("preferences.include_media" , self.include_media)
         CONFIG.set("preferences.include_depot" , self.include_depot)
@@ -1008,6 +1022,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         CONFIG.set("preferences.namegen" , self.namegen)
         CONFIG.set("preferences.nameus" , self.nameus)
         CONFIG.set("preferences.anychar" , self.anychar)
+        CONFIG.set("preferences.citattr" , self.citattr)
         CONFIG.save()
 
 def export_data(database, filename, user, option_box=None):
