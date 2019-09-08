@@ -9,7 +9,6 @@ Ce greffon est une "amélioration" de l'export gedcom de Geneanet. Il apporte le
 * Gestion des relations non maritales
 * Inclusion des chemins des médias
 * Exclure le nom des dépots dans les sources
-* Offuscation des sources généanet
 * Suppression des chemins absolus dans le chemin des fichiers
 * Suppression de l'attribut "ID Gramps fusionné"
 * Ajout de la qualité des sources dans la description des sources
@@ -17,6 +16,7 @@ Ce greffon est une "amélioration" de l'export gedcom de Geneanet. Il apporte le
 * Embelissement des noms alternatifs
 * Suppression du support de la norme anychar du Gedcom 5.5
 * Gestion des noms usuels
+* Export des attributs des citations
 
 ## Installation
 
@@ -36,6 +36,7 @@ Pour les baptèmes Si vous avez défini un role CUSTOM la personne de sexe mascu
 #### Témoins et rôle.
 
 Pour les évenements individuels hors baptème tous les rôles sont assimilés à des témoins au vu de la pauvreté de la norme GEDCOM. 
+Néanmoins l'option extend_role permet d'afficher le role mais celui sera alors sur deux lignes 
 
 ### Gestion des relations non maritales
 Pour les couples non mariés leur statut n'est plus mariés. 
@@ -43,10 +44,6 @@ Pour les couples non mariés leur statut n'est plus mariés.
 ### Exclure le nom des dépots dans les sources
 
 Cela permet d'exclure le nom du dépot dans le nom des sources.
-
-### Offuscation des sources généanet
-
-Cet option permet d'augmenter le nombre d'étoiles dans le défunt système de Généanet.
 
 ### Suppression des chemins absolus dans le chemin des fichiers
 
@@ -69,3 +66,7 @@ Geneanet n'implemente pas la norme anychar de la norme Gedcom5.3 qui impose de d
 ### Gestion des noms usuels
 
 Permet d'exporter le prénom usuel en l'indiquant entre "
+
+### Export des attributs des citations
+
+Permet d'exporter les attributs d'une citation. Cela permet par exemple d'indiquer l'url d'un acte
