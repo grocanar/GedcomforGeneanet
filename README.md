@@ -16,6 +16,7 @@ Ce greffon est une "amélioration" de l'export gedcom de Geneanet. Il apporte le
 * Création d'une archive zip des médias concernés
 * Embelissement des noms alternatifs
 * Suppression du support de la norme anychar du Gedcom 5.5
+* Gestion des noms usuels
 
 ## Installation
 
@@ -63,3 +64,8 @@ Geneanet pour les noms alternatifs ne respectent pas la norme Gedcom qui impose 
 ### Suppression du support de la norme anychar du Gedcom 5.5
 
 Geneanet n'implemente pas la norme anychar de la norme Gedcom5.3 qui impose de doubler les caractères @. Ainsi les dates exportés dans GRAMPS dans un calendrier alternatif ne sont pas bien rendues. Cette option permet de supprimer le doublement des @.
+
+
+### Gestion des noms usuels
+
+Permet d'exporter le prénom usuel en l'indiquant entre "

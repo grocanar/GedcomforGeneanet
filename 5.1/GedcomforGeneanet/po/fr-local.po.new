@@ -56,42 +56,21 @@ msgid "Could not create %s"
 msgstr "Impossible de créer %s"
 
 #: ../GedcomforGeneanet.py:361
-msgid "Export failed"
-msgstr "L'exportation a échoué"
-
 msgid "Export Source Quality"
-msgstr "Export de la qualité des sources"
+msgstr "Ajout de la qualité des sources"
 
+#: ../GedcomforGeneanet.py:361
+msgid "Export failed"
+msgstr "L exportation a échoué"
+
+#: ../GedcomforGeneanet.py:361
 msgid "Create a zip of medias"
 msgstr "Créer une archive zip des médias"
 
-msgid "Very High Quality Source"
-msgstr "Source de qualité très elevée"
-
-msgid "High Quality Source"
-msgstr "Source de qualité elevée"
-
-msgid "Normal Quality Source"
-msgstr "Source de qualité normale"
-
-msgid "Low Quality Source"
-msgstr "Source de qualité basse"
-
-msgid "Very Low Quality Source"
-msgstr "Source de qualité trèsbasse"
-
+#: ../GedcomforGeneanet.py:361
 msgid "Geneanet name beautify"
 msgstr "Embelissement des noms alternatifs"
 
-msgid "Implementation of anychar"
-msgstr "Support de la norme Gedcom 5.5 anychar"
-
-msgid "Support for call name"
-msgstr "Gestion du nom usuel"
-
-msgid "Export of attributes of citation"
-msgstr "Export des attributs des citations"
-
-msgid "Role Display for Events"
-msgstr "Afficher le rôle pour les Évenements"
-
+#: ../GedcomforGeneanet.py:361
+msgid "Very High Quality Source"
+msgstr "Embelissement des noms alternatifs"
