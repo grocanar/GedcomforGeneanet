@@ -39,12 +39,13 @@ import io
 #
 #------------------------------------------------------------------------
 from gi.repository import Gtk
+
 import gramps.plugins.lib.libgedcom as libgedcom
 from gramps.plugins.export import exportgedcom
 from gramps.gui.plug.export import WriterOptionBox
 from gramps.gen.errors import DatabaseError
 from gramps.gen.lib import (EventRoleType, FamilyRelType, Citation, EventType,\
- Person, AttributeType, NameType, NoteType)
+ PlaceType,Person, AttributeType, NameType, NoteType)
 from gramps.gen.const import GRAMPS_LOCALE as glocale
 from gramps.gen.utils.file import media_path_full, media_path, relative_path
 try:
@@ -56,6 +57,8 @@ import zipfile
 import logging
 from gramps.version import VERSION
 from gramps.gen.config import config
+from gramps.gen.display.place import displayer as _pd
+from gramps.gen.utils.location import get_main_location
 LOG = logging.getLogger("gedcomforgeneanet")
 
 
@@ -100,6 +103,7 @@ CONFIG.register("preferences.namegen" , True)
 CONFIG.register("preferences.nameus" , False)
 CONFIG.register("preferences.anychar", True)
 CONFIG.register("preferences.citattr", True)
+CONFIG.register("preferences.placenote", True)
 CONFIG.load()
 
 #-------------------------------------------------------------------------
@@ -146,6 +150,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.nameus = option_box.nameus
             self.anychar = option_box.anychar
             self.citattr = option_box.citattr
+            self.placenote = option_box.placenote
             CONFIG.save()
         else:
             LOG.debug("pas dans OPTION %s")
@@ -160,6 +165,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.nameus = 1
             self.anychar = 1
             self.citattr = 1
+            self.placenote = 0
         self.zipfile = None
 
     def get_filtered_database(self, dbase, progress=None, preview=False):
@@ -210,6 +216,64 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
                             ).format(number_of=people_count) )
         return dbase
 
+    def _place(self, place, dateobj, level):
+        """
+        PLACE_STRUCTURE:=
+            n PLAC <PLACE_NAME> {1:1}
+            +1 FORM <PLACE_HIERARCHY> {0:1}
+            +1 FONE <PLACE_PHONETIC_VARIATION> {0:M}  # not used
+            +2 TYPE <PHONETIC_TYPE> {1:1}
+            +1 ROMN <PLACE_ROMANIZED_VARIATION> {0:M} # not used
+            +2 TYPE <ROMANIZED_TYPE> {1:1}
+            +1 MAP {0:1}
+            +2 LATI <PLACE_LATITUDE> {1:1}
+            +2 LONG <PLACE_LONGITUDE> {1:1}
+            +1 <<NOTE_STRUCTURE>> {0:M}
+        """
+        if place is None:
+            return
+        place_name = _pd.display(self.dbase, place, dateobj)
+        self._writeln(level, "PLAC", place_name.replace('\r', ' '), limit=120)
+        longitude = place.get_longitude()
+        latitude = place.get_latitude()
+        if longitude and latitude:
+            (latitude, longitude) = conv_lat_lon(latitude, longitude, "GEDCOM")
+        if longitude and latitude:
+            self._writeln(level + 1, "MAP")
+            self._writeln(level + 2, 'LATI', latitude)
+            self._writeln(level + 2, 'LONG', longitude)
+
+        # The Gedcom standard shows that an optional address structure can
+        # be written out in the event detail.
+        # http://homepages.rootsweb.com/~pmcbride/gedcom/55gcch2.htm#EVENT_DETAIL
+        location = get_main_location(self.dbase, place)
+        street = location.get(PlaceType.STREET)
+        locality = location.get(PlaceType.LOCALITY)
+        city = location.get(PlaceType.CITY)
+        state = location.get(PlaceType.STATE)
+        country = location.get(PlaceType.COUNTRY)
+        postal_code = place.get_code()
+
+        if street or locality or city or state or postal_code or country:
+            self._writeln(level, "ADDR", street)
+            if street:
+                self._writeln(level + 1, 'ADR1', street)
+            if locality:
+                self._writeln(level + 1, 'ADR2', locality)
+            if city:
+                self._writeln(level + 1, 'CITY', city)
+            if state:
+                self._writeln(level + 1, 'STAE', state)
+            if postal_code:
+                self._writeln(level + 1, 'POST', postal_code)
+            if country:
+                self._writeln(level + 1, 'CTRY', country)
+        if self.placenote:
+            LOG.debug("PLACENOTE")
+            self._note_references(place.get_note_list(), level)
+        else:
+            LOG.debug(" PAS PLACENOTE")
+            self._note_references(place.get_note_list(), level + 1)
 
 
     def _names(self, person):
@@ -945,6 +1009,8 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.anychar_check = None
         self.citattr = CONFIG.get("preferences.citattr")
         self.citattr_check = None
+        self.placenote = CONFIG.get("preferences.placenote")
+        self.placenote_check = None
 
     def get_option_box(self):
         option_box = super(GedcomWriterOptionBox, self).get_option_box()
@@ -960,6 +1026,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.nameus_check = Gtk.CheckButton(_("Support for call name"))
         self.anychar_check = Gtk.CheckButton(_("Implementation of anychar"))
         self.citattr_check = Gtk.CheckButton(_("Export of attributes of citation"))
+        self.placenote_check = Gtk.CheckButton(_("Increase level of place note"))
         #self.include_witnesses_check.set_active(1)
         self.include_witnesses_check.set_active(CONFIG.get("preferences.include_witnesses"))
         self.include_media_check.set_active(CONFIG.get("preferences.include_media"))
@@ -972,6 +1039,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.nameus_check.set_active(CONFIG.get("preferences.nameus"))
         self.anychar_check.set_active(CONFIG.get("preferences.anychar"))
         self.citattr_check.set_active(CONFIG.get("preferences.citattr"))
+        self.placenote_check.set_active(CONFIG.get("preferences.placenote"))
 
         # Add to gui:
         option_box.pack_start(self.include_witnesses_check, False, False, 0)
@@ -985,6 +1053,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         option_box.pack_start(self.nameus_check, False, False, 0)
         option_box.pack_start(self.anychar_check, False, False, 0)
         option_box.pack_start(self.citattr_check, False, False, 0)
+        option_box.pack_start(self.placenote_check, False, False, 0)
         return option_box
 
     def parse_options(self):
@@ -1014,6 +1083,8 @@ class GedcomWriterOptionBox(WriterOptionBox):
             self.anychar = self.anychar_check.get_active()
         if self.citattr_check:
             self.citattr = self.citattr_check.get_active()
+        if self.placenote_check:
+            self.placenote = self.placenote_check.get_active()
         CONFIG.set("preferences.include_witnesses" , self.include_witnesses )
         CONFIG.set("preferences.include_media" , self.include_media)
         CONFIG.set("preferences.include_depot" , self.include_depot)
@@ -1025,6 +1096,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         CONFIG.set("preferences.nameus" , self.nameus)
         CONFIG.set("preferences.anychar" , self.anychar)
         CONFIG.set("preferences.citattr" , self.citattr)
+        CONFIG.set("preferences.placenote" , self.placenote)
         CONFIG.save()
 
 def export_data(database, filename, user, option_box=None):
