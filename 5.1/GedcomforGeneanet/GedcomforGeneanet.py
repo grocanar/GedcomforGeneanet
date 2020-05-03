@@ -101,7 +101,6 @@ CONFIG.register("preferences.extended_role" , False)
 CONFIG.register("preferences.relativepath" , True)
 CONFIG.register("preferences.quaynote", True)
 CONFIG.register("preferences.zip", False)
-CONFIG.register("preferences.namegen" , True)
 CONFIG.register("preferences.nameus" , False)
 CONFIG.register("preferences.anychar", True)
 CONFIG.register("preferences.citattr", True)
@@ -148,7 +147,6 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.extended_role = option_box.extended_role
             self.quaynote = option_box.quaynote
             self.zip = option_box.zip
-            self.namegen = option_box.namegen
             self.nameus = option_box.nameus
             self.anychar = option_box.anychar
             self.citattr = option_box.citattr
@@ -163,7 +161,6 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.relativepath = 0
             self.quaynote = 0
             self.zip = 0
-            self.namegen = 0
             self.nameus = 1
             self.anychar = 1
             self.citattr = 1
@@ -458,10 +455,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
         +1 <<SOURCE_CITATION>> {0:M}
         +1 <<NOTE_STRUCTURE>> {0:M}
         """
-        if self.namegen:
-            gedcom_name = self.get_genegedcom_name(name)
-        else:
-            gedcom_name = self.get_gedcom_name(name)
+        gedcom_name = self.get_gedcom_name(name)
 
         firstname = name.get_first_name().strip()
         surns = []
@@ -1003,8 +997,6 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.quaynote_check = None
         self.zip = CONFIG.get("preferences.zip")
         self.zip_check = None
-        self.namegen = CONFIG.get("preferences.namegen")
-        self.namegen_check = None
         self.nameus = CONFIG.get("preferences.nameus")
         self.nameus_check = None
         self.anychar = CONFIG.get("preferences.anychar")
@@ -1024,7 +1016,6 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.extended_role_check = Gtk.CheckButton(_("Role Display for Events"))
         self.quaynote_check = Gtk.CheckButton(_("Export Source Quality"))
         self.zip_check = Gtk.CheckButton(_("Create a zip of medias"))
-        self.namegen_check = Gtk.CheckButton(_("Geneanet name beautify"))
         self.nameus_check = Gtk.CheckButton(_("Support for call name"))
         self.anychar_check = Gtk.CheckButton(_("Implementation of anychar"))
         self.citattr_check = Gtk.CheckButton(_("Export of attributes of citation"))
@@ -1037,7 +1028,6 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.extended_role_check.set_active(CONFIG.get("preferences.extended_role"))
         self.quaynote_check.set_active(CONFIG.get("preferences.quaynote"))
         self.zip_check.set_active(CONFIG.get("preferences.zip"))
-        self.namegen_check.set_active(CONFIG.get("preferences.namegen"))
         self.nameus_check.set_active(CONFIG.get("preferences.nameus"))
         self.anychar_check.set_active(CONFIG.get("preferences.anychar"))
         self.citattr_check.set_active(CONFIG.get("preferences.citattr"))
@@ -1051,7 +1041,6 @@ class GedcomWriterOptionBox(WriterOptionBox):
         option_box.pack_start(self.extended_role_check, False, False, 0)
         option_box.pack_start(self.quaynote_check, False, False, 0)
         option_box.pack_start(self.zip_check, False, False, 0)
-        option_box.pack_start(self.namegen_check, False, False, 0)
         option_box.pack_start(self.nameus_check, False, False, 0)
         option_box.pack_start(self.anychar_check, False, False, 0)
         option_box.pack_start(self.citattr_check, False, False, 0)
@@ -1077,8 +1066,6 @@ class GedcomWriterOptionBox(WriterOptionBox):
             self.quaynote = self.quaynote_check.get_active()
         if self.zip_check:
             self.zip = self.zip_check.get_active()
-        if self.namegen_check:
-            self.namegen = self.namegen_check.get_active()
         if self.nameus_check:
             self.nameus = self.nameus_check.get_active()
         if self.anychar_check:
@@ -1094,7 +1081,6 @@ class GedcomWriterOptionBox(WriterOptionBox):
         CONFIG.set("preferences.relativepath" , self.relativepath)
         CONFIG.set("preferences.quaynote" , self.quaynote)
         CONFIG.set("preferences.zip" , self.zip)
-        CONFIG.set("preferences.namegen" , self.namegen)
         CONFIG.set("preferences.nameus" , self.nameus)
         CONFIG.set("preferences.anychar" , self.anychar)
         CONFIG.set("preferences.citattr" , self.citattr)
