@@ -639,7 +639,6 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             if self.include_depot:
                 for reporef in source.get_reporef_list():
                     self._reporef(reporef, 1)
-                    break
 
             self._note_references(source.get_note_list(), 1)
             self._change(source.get_change_time(), 1)
