@@ -13,10 +13,10 @@ Ce greffon est une "amélioration" de l'export gedcom de Geneanet. Il apporte le
 * Suppression de l'attribut "ID Gramps fusionné"
 * Ajout de la qualité des sources dans la description des sources
 * Création d'une archive zip des médias concernés
-* Embelissement des noms alternatifs
 * Suppression du support de la norme anychar du Gedcom 5.5
 * Gestion des noms usuels
 * Export des attributs des citations
+* Export des informations de recensement d'un individu
 
 ## Installation
 
@@ -54,10 +54,6 @@ Cela permet de supprimer en général une information utilisateur dans le fichie
 
 Cet attribut n'ayant pas d'intérêt celui est supprimé durant l'export
 
-### Embelissement des noms alternatifs
-
-Geneanet pour les noms alternatifs ne respectent pas la norme Gedcom qui impose de mettre les noms entre //. De ce fait on retrouve ces caractères dans le champs alias. Cette option permet de supprimer les // des noms alternatifs.
-
 ### Suppression du support de la norme anychar du Gedcom 5.5
 
 Geneanet n'implemente pas la norme anychar de la norme Gedcom5.3 qui impose de doubler les caractères @. Ainsi les dates exportés dans GRAMPS dans un calendrier alternatif ne sont pas bien rendues. Cette option permet de supprimer le doublement des @.
@@ -70,3 +66,7 @@ Permet d'exporter le prénom usuel en l'indiquant entre "
 ### Export des attributs des citations
 
 Permet d'exporter les attributs d'une citation. Cela permet par exemple d'indiquer l'url d'un acte
+
+### Export des informations de recensement d'un individu
+
+Permet d'exporter pour un individu les informations dans un recensement sous formes de notes d'évenement.
