@@ -104,6 +104,7 @@ CONFIG.register("preferences.zip", False)
 CONFIG.register("preferences.nameus" , False)
 CONFIG.register("preferences.anychar", True)
 CONFIG.register("preferences.citattr", True)
+CONFIG.register("preferences.inccensus", True)
 CONFIG.register("preferences.placenote", True)
 CONFIG.load()
 
@@ -150,6 +151,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.nameus = option_box.nameus
             self.anychar = option_box.anychar
             self.citattr = option_box.citattr
+            self.inccensus = option_box.inccensus
             self.placenote = option_box.placenote
             CONFIG.save()
         else:
@@ -164,6 +166,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.nameus = 1
             self.anychar = 1
             self.citattr = 1
+            self.inccensus = 1
             self.placenote = 0
         self.zipfile = None
 
@@ -596,13 +599,18 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
                 if person:
                     for ref in person.get_event_ref_list():
                         if ref.ref == event.handle:
-                            if int(ref.get_role()) in [EventRoleType.WITNESS,EventRoleType.CELEBRANT,\
-                        EventRoleType.INFORMANT,\
-                             EventRoleType.CLERGY, EventRoleType.AIDE, EventRoleType.CUSTOM]:
+                            role=int(ref.get_role())
+                            if role in [EventRoleType.WITNESS,EventRoleType.CELEBRANT, EventRoleType.INFORMANT, EventRoleType.CLERGY, EventRoleType.AIDE, EventRoleType.FAMILY, EventRoleType.CUSTOM]:
                                 level = 2
+                                rol = role + 1
                                 self._writeln(level, "ASSO", "@%s@" % person.get_gramps_id())
                                 self._writeln(level+1, "TYPE", "INDI")
                                 self._writeln(level+1, "RELA", "Witness")
+                                if self.extended_role:
+                                    if role:
+                                        self._writeln(level+1, "NOTE", '\xA0%s' % EventRoleType._DATAMAP[rol][1])
+                                    else:
+                                        self._writeln(level+1, "NOTE", '\xA0%s' % str(ref.role))
                                 self._note_references(ref.get_note_list(), level+1)
 
     def _sources(self):
@@ -636,7 +644,6 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             if self.include_depot:
                 for reporef in source.get_reporef_list():
                     self._reporef(reporef, 1)
-                    break
 
             self._note_references(source.get_note_list(), 1)
             self._change(source.get_change_time(), 1)
@@ -663,7 +670,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
                         devel = 2
                         if (ref.ref == event.handle): 
                             role = int(ref.get_role())
-                            if int(ref.get_role()) in [EventRoleType.WITNESS,EventRoleType.CELEBRANT, EventRoleType.INFORMANT, EventRoleType.AIDE ,EventRoleType.CLERGY, EventRoleType.AIDE,EventRoleType.CUSTOM]:
+                            if int(ref.get_role()) in [EventRoleType.WITNESS,EventRoleType.CELEBRANT, EventRoleType.INFORMANT, EventRoleType.AIDE ,EventRoleType.CLERGY, EventRoleType.AIDE,EventRoleType.FAMILY,EventRoleType.CUSTOM]:
                                 level = 2
                                 rol = role + 1
                                 self._writeln(level, "ASSO", "@%s@" % person.get_gramps_id())
@@ -724,7 +731,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
                         for ref in person2.get_event_ref_list():
                             if (ref.ref == event.handle):  
                                 role=int(ref.get_role())
-                                if int(ref.get_role()) in [EventRoleType.WITNESS, EventRoleType.CELEBRANT, EventRoleType.INFORMANT, EventRoleType.AIDE, EventRoleType.CLERGY, EventRoleType.AIDE, EventRoleType.CUSTOM]:
+                                if int(ref.get_role()) in [EventRoleType.WITNESS, EventRoleType.CELEBRANT, EventRoleType.INFORMANT, EventRoleType.AIDE, EventRoleType.CLERGY, EventRoleType.AIDE, EventRoleType.FAMILY, EventRoleType.CUSTOM]:
                                     level = 2
 #pylint: disable=maybe-no-member
                                     rol = role + 1
@@ -737,6 +744,79 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
                                         else:
                                             self._writeln(level+1, "NOTE", '\xA0%s' % str(ref.role))
                                     self._note_references(ref.get_note_list(), level+1)
+
+    def _dump_event_stats(self, event, event_ref):
+        """
+        Write the event details for the event, using the event and event
+        reference information.
+
+        GEDCOM does not make a distinction between the two.
+
+        """
+        dateobj = event.get_date_object()
+        self._date(2, dateobj)
+        if self._datewritten:
+            # write out TIME if present
+            times = [attr.get_value() for attr in event.get_attribute_list()
+                     if int(attr.get_type()) == AttributeType.TIME]
+            # Not legal, but inserted by PhpGedView
+            if len(times) > 0:
+                self._writeln(3, 'TIME', times[0])
+
+        place = None
+
+        if event.get_place_handle():
+            place = self.dbase.get_place_from_handle(event.get_place_handle())
+            self._place(place, dateobj, 2)
+
+        for attr in event.get_attribute_list():
+            attr_type = attr.get_type()
+            if attr_type == AttributeType.CAUSE:
+                self._writeln(2, 'CAUS', attr.get_value())
+            elif attr_type == AttributeType.AGENCY:
+                self._writeln(2, 'AGNC', attr.get_value())
+            elif attr_type == _("Phone"):
+                self._writeln(2, 'PHON', attr.get_value())
+            elif attr_type == _("FAX"):
+                self._writeln(2, 'FAX', attr.get_value())
+            elif attr_type == _("EMAIL"):
+                self._writeln(2, 'EMAIL', attr.get_value())
+            elif attr_type == _("WWW"):
+                self._writeln(2, 'WWW', attr.get_value())
+
+        resultstring = ""
+        for attr in event_ref.get_attribute_list():
+            attr_type = attr.get_type()
+            if attr_type == AttributeType.AGE:
+                self._writeln(2, 'AGE', attr.get_value())
+            elif attr_type == AttributeType.FATHER_AGE:
+                self._writeln(2, 'HUSB')
+                self._writeln(3, 'AGE', attr.get_value())
+            elif attr_type == AttributeType.MOTHER_AGE:
+                self._writeln(2, 'WIFE')
+                self._writeln(3, 'AGE', attr.get_value())
+            
+        etype = int(event.get_type())
+        if self.inccensus and etype == EventType.CENSUS:
+            attrs = event_ref.get_attribute_list()
+            if len(attrs):
+                self._writeln(2, 'NOTE' )
+                for attr in attrs:
+                    typ = str(attr.get_type())
+                    val = str(attr.get_value())
+                    LOG.debug("TYPE %s VAL %s" % ( typ , val))
+                    text = typ + " : " + val
+                    self._writeln(3,'CONT', text )
+            
+            
+
+        self._note_references(event.get_note_list(), 2)
+        self._source_references(event.get_citation_list(), 2)
+
+        self._photos(event.get_media_list(), 2)
+        if place:
+            self._photos(place.get_media_list(), 2)
+    
 
     def _attributes(self, person):
         """
@@ -1005,6 +1085,8 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.citattr_check = None
         self.placenote = CONFIG.get("preferences.placenote")
         self.placenote_check = None
+        self.inccensus = CONFIG.get("preferences.placenote")
+        self.inccensus_check = None
 
     def get_option_box(self):
         option_box = super(GedcomWriterOptionBox, self).get_option_box()
@@ -1019,6 +1101,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.nameus_check = Gtk.CheckButton(_("Support for call name"))
         self.anychar_check = Gtk.CheckButton(_("Implementation of anychar"))
         self.citattr_check = Gtk.CheckButton(_("Export of attributes of citation"))
+        self.inccensus_check = Gtk.CheckButton(_("Include Census information for people"))
         self.placenote_check = Gtk.CheckButton(_("Increase level of place note"))
         #self.include_witnesses_check.set_active(1)
         self.include_witnesses_check.set_active(CONFIG.get("preferences.include_witnesses"))
@@ -1031,6 +1114,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.nameus_check.set_active(CONFIG.get("preferences.nameus"))
         self.anychar_check.set_active(CONFIG.get("preferences.anychar"))
         self.citattr_check.set_active(CONFIG.get("preferences.citattr"))
+        self.inccensus_check.set_active(CONFIG.get("preferences.inccensus"))
         self.placenote_check.set_active(CONFIG.get("preferences.placenote"))
 
         # Add to gui:
@@ -1044,6 +1128,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         option_box.pack_start(self.nameus_check, False, False, 0)
         option_box.pack_start(self.anychar_check, False, False, 0)
         option_box.pack_start(self.citattr_check, False, False, 0)
+        option_box.pack_start(self.inccensus_check, False, False, 0)
         option_box.pack_start(self.placenote_check, False, False, 0)
         return option_box
 
@@ -1072,6 +1157,8 @@ class GedcomWriterOptionBox(WriterOptionBox):
             self.anychar = self.anychar_check.get_active()
         if self.citattr_check:
             self.citattr = self.citattr_check.get_active()
+        if self.inccensus_check:
+            self.inccensus = self.inccensus_check.get_active()
         if self.placenote_check:
             self.placenote = self.placenote_check.get_active()
         CONFIG.set("preferences.include_witnesses" , self.include_witnesses )
@@ -1084,6 +1171,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         CONFIG.set("preferences.nameus" , self.nameus)
         CONFIG.set("preferences.anychar" , self.anychar)
         CONFIG.set("preferences.citattr" , self.citattr)
+        CONFIG.set("preferences.inccensus" , self.inccensus)
         CONFIG.set("preferences.placenote" , self.placenote)
         CONFIG.save()
 
