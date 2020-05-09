@@ -48,6 +48,7 @@ from gramps.gen.lib import (EventRoleType, FamilyRelType, Citation, EventType,\
  PlaceType,Person, AttributeType, NameType, NoteType)
 from gramps.gen.const import GRAMPS_LOCALE as glocale
 from gramps.gen.utils.file import media_path_full, media_path, relative_path
+from gramps.gen.utils.location import get_location_list
 try:
     _trans = glocale.get_addon_translator(__file__)
 except ValueError:
@@ -60,6 +61,8 @@ from gramps.gen.config import config
 from gramps.gen.display.place import displayer as _pd
 from gramps.gen.utils.location import get_main_location
 from gramps.gen.utils.place import conv_lat_lon
+
+from gramps.gen.display import place
 
 LOG = logging.getLogger("gedcomforgeneanet")
 
@@ -106,6 +109,7 @@ CONFIG.register("preferences.anychar", True)
 CONFIG.register("preferences.citattr", True)
 CONFIG.register("preferences.inccensus", True)
 CONFIG.register("preferences.placenote", True)
+CONFIG.register("preferences.placegeneanet", True)
 CONFIG.load()
 
 #-------------------------------------------------------------------------
@@ -131,6 +135,103 @@ def sort_handles_by_id(handle_list, handle_to_object):
     return sorted_list
 
 
+class PlaceDisplayGeneanet(place.PlaceDisplay):
+    
+    def __init__(self):
+        super(PlaceDisplayGeneanet,self).__init__()
+
+    def display(self, db, place, date=None, fmt=-1):
+        if not place:
+            return ""
+        if not config.get('preferences.place-auto'):
+            return place.title
+        else:
+            if fmt == -1:
+                fmt = config.get('preferences.place-format')
+            pf = self.place_formats[fmt]
+            lang = pf.language
+            places = get_location_list(db, place, date, lang)
+            visited = [place.handle]
+            postal_code = place.get_code()
+            if not postal_code:
+                place2 =""
+                for placeref in place.placeref_list:
+                    place2 = db.get_place_from_handle(placeref.ref)
+                    if place2:
+                        postal_code = self._find_postal_code(db,place2,visited)
+                        if postal_code:
+                            break
+            return  self._find_populated_place(places,place,postal_code)
+
+    def _find_postal_code(self,db,place,visited):
+        postal_code = place.get_code()
+        if postal_code:
+            return postal_code
+        else:
+            for placeref in place.placeref_list:
+                if placeref.ref not in visited:
+                    place2 = db.get_place_from_handle(placeref.ref)
+                    if place2:
+                        visited.append(place2.handle)
+                        postal_code = self._find_postal_code(db,place2,visited)
+                        if postal_code:
+                            break
+            return postal_code
+ 
+    def _find_populated_place(self,places,place,postal_code):
+        populated_place = ""
+        level = 0
+        for index, item in enumerate(places):
+            if int(item[1]) in [PlaceType.NUMBER, PlaceType.BUILDING , PlaceType.FARM , PlaceType.HAMLET, PlaceType.NEIGHBORHOOD , PlaceType.STREET , PlaceType.PARISH , PlaceType.LOCALITY , PlaceType.BOROUGH, PlaceType.UNKNOWN]:
+                level = 1
+                if populated_place == "":
+                    populated_place = "[ " + item[0]
+                else :
+                    populated_place = populated_place + " - " + item[0] 
+            elif int(item[1]) in [PlaceType.CITY, PlaceType.VILLAGE,
+                            PlaceType.TOWN]:
+                level = 2
+                if populated_place == "":
+                    populated_place = item[0]
+                else:
+                    populated_place = populated_place + " ] - " + item[0]
+                populated_place = populated_place + ","  + postal_code
+            elif int(item[1]) in [PlaceType.COUNTY, PlaceType.DEPARTMENT ]:
+                if populated_place == "":
+                    populated_place = item[0]
+                else:
+                    if level == 1:
+                        populated_place = populated_place + " ] - ,," + item[0]
+                    else:
+                        populated_place = populated_place + "," + item[0]
+                    level = 3
+            elif int(item[1]) in [PlaceType.STATE, PlaceType.REGION , PlaceType.PROVINCE ]:
+                if populated_place == "":
+                    populated_place = item[0]
+                else:
+                    if level == 1:
+                        populated_place = populated_place + " ] - ,,," + item[0]
+                    elif level ==  2:
+                        populated_place = populated_place + ",," + item[0]
+                    else:
+                         populated_place = populated_place + "," + item[0]
+                    level = 4
+            elif int(item[1]) in [PlaceType.COUNTRY ]:
+                if populated_place == "":
+                    populated_place = item[0]
+                else:
+                    if level == 1:
+                        populated_place = populated_place + " ] - ,,,," + item[0]
+                    elif level ==  2:
+                        populated_place = populated_place + ",,," + item[0]
+                    elif level == 3:
+                        populated_place = populated_place + ",," + item[0]
+                    else:
+                        populated_place = populated_place + "," + item[0]
+                    level = 5
+        return populated_place
+
+
 class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
     """
     GedcomWriter forGeneanets.
@@ -153,6 +254,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.citattr = option_box.citattr
             self.inccensus = option_box.inccensus
             self.placenote = option_box.placenote
+            self.placegeneanet = option_box.placegeneanet
             CONFIG.save()
         else:
             LOG.debug("pas dans OPTION %s")
@@ -168,6 +270,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.citattr = 1
             self.inccensus = 1
             self.placenote = 0
+            self.placegeneanet = 0
         self.zipfile = None
 
     def get_filtered_database(self, dbase, progress=None, preview=False):
@@ -234,7 +337,12 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
         """
         if place is None:
             return
-        place_name = _pd.display(self.dbase, place, dateobj)
+       
+        if self.placegeneanet:
+            displayer=PlaceDisplayGeneanet()
+            place_name = displayer.display(self.dbase, place, dateobj)
+        else:
+            place_name = _pd.display(self.dbase, place, dateobj)
         self._writeln(level, "PLAC", place_name.replace('\r', ' '), limit=120)
         longitude = place.get_longitude()
         latitude = place.get_latitude()
@@ -1085,7 +1193,9 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.citattr_check = None
         self.placenote = CONFIG.get("preferences.placenote")
         self.placenote_check = None
-        self.inccensus = CONFIG.get("preferences.placenote")
+        self.placegeneanet = CONFIG.get("preferences.placegeneanet")
+        self.placegeneanet_check = None
+        self.inccensus = CONFIG.get("preferences.inccensus")
         self.inccensus_check = None
 
     def get_option_box(self):
@@ -1103,6 +1213,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.citattr_check = Gtk.CheckButton(_("Export of attributes of citation"))
         self.inccensus_check = Gtk.CheckButton(_("Include Census information for people"))
         self.placenote_check = Gtk.CheckButton(_("Increase level of place note"))
+        self.placegeneanet_check = Gtk.CheckButton(_("Geneanet format place"))
         #self.include_witnesses_check.set_active(1)
         self.include_witnesses_check.set_active(CONFIG.get("preferences.include_witnesses"))
         self.include_media_check.set_active(CONFIG.get("preferences.include_media"))
@@ -1116,6 +1227,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.citattr_check.set_active(CONFIG.get("preferences.citattr"))
         self.inccensus_check.set_active(CONFIG.get("preferences.inccensus"))
         self.placenote_check.set_active(CONFIG.get("preferences.placenote"))
+        self.placegeneanet_check.set_active(CONFIG.get("preferences.placegeneanet"))
 
         # Add to gui:
         option_box.pack_start(self.include_witnesses_check, False, False, 0)
@@ -1130,6 +1242,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         option_box.pack_start(self.citattr_check, False, False, 0)
         option_box.pack_start(self.inccensus_check, False, False, 0)
         option_box.pack_start(self.placenote_check, False, False, 0)
+        option_box.pack_start(self.placegeneanet_check, False, False, 0)
         return option_box
 
     def parse_options(self):
@@ -1161,6 +1274,8 @@ class GedcomWriterOptionBox(WriterOptionBox):
             self.inccensus = self.inccensus_check.get_active()
         if self.placenote_check:
             self.placenote = self.placenote_check.get_active()
+        if self.placegeneanet_check:
+            self.placegeneanet = self.placegeneanet_check.get_active()
         CONFIG.set("preferences.include_witnesses" , self.include_witnesses )
         CONFIG.set("preferences.include_media" , self.include_media)
         CONFIG.set("preferences.include_depot" , self.include_depot)
@@ -1173,6 +1288,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         CONFIG.set("preferences.citattr" , self.citattr)
         CONFIG.set("preferences.inccensus" , self.inccensus)
         CONFIG.set("preferences.placenote" , self.placenote)
+        CONFIG.set("preferences.placegeneanet" , self.placegeneanet)
         CONFIG.save()
 
 def export_data(database, filename, user, option_box=None):
