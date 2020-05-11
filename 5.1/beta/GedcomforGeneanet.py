@@ -44,7 +44,8 @@ import gramps.plugins.lib.libgedcom as libgedcom
 from gramps.plugins.export import exportgedcom
 from gramps.gui.plug.export import WriterOptionBox
 from gramps.gen.errors import DatabaseError
-from gramps.gen.lib import (EventRoleType, FamilyRelType, Citation, EventType,\
+from gramps.gen.lib.date import Today
+from gramps.gen.lib import (EventRoleType, FamilyRelType, Citation, EventType,Date, \
  PlaceType,Person, AttributeType, NameType, NoteType)
 from gramps.gen.const import GRAMPS_LOCALE as glocale
 from gramps.gen.utils.file import media_path_full, media_path, relative_path
@@ -56,12 +57,12 @@ except ValueError:
 _ = _trans.gettext
 import zipfile
 import logging
+import datetime
 from gramps.version import VERSION
 from gramps.gen.config import config
 from gramps.gen.display.place import displayer as _pd
 from gramps.gen.utils.location import get_main_location
 from gramps.gen.utils.place import conv_lat_lon
-
 from gramps.gen.display import place
 
 LOG = logging.getLogger("gedcomforgeneanet")
@@ -110,6 +111,7 @@ CONFIG.register("preferences.citattr", True)
 CONFIG.register("preferences.inccensus", True)
 CONFIG.register("preferences.placenote", True)
 CONFIG.register("preferences.placegeneanet", True)
+CONFIG.register("preferences.ancplacename", True)
 CONFIG.load()
 
 #-------------------------------------------------------------------------
@@ -255,6 +257,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.inccensus = option_box.inccensus
             self.placenote = option_box.placenote
             self.placegeneanet = option_box.placegeneanet
+            self.ancplacename = option_box.ancplacename
             CONFIG.save()
         else:
             LOG.debug("pas dans OPTION %s")
@@ -271,6 +274,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.inccensus = 1
             self.placenote = 0
             self.placegeneanet = 0
+            self.ancplacename = 0
         self.zipfile = None
 
     def get_filtered_database(self, dbase, progress=None, preview=False):
@@ -340,7 +344,8 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
        
         if self.placegeneanet:
             displayer=PlaceDisplayGeneanet()
-            place_name = displayer.display(self.dbase, place, dateobj)
+            dateobj2=Today()
+            place_name = displayer.display(self.dbase, place, dateobj2)
         else:
             place_name = _pd.display(self.dbase, place, dateobj)
         self._writeln(level, "PLAC", place_name.replace('\r', ' '), limit=120)
@@ -378,6 +383,13 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
                 self._writeln(level + 1, 'POST', postal_code)
             if country:
                 self._writeln(level + 1, 'CTRY', country)
+        if self.placegeneanet and self.ancplacename:
+            anc_name = displayer.display(self.dbase, place, dateobj)
+            if anc_name != place_name:
+                place_name = _pd.display(self.dbase, place, dateobj)
+                self._writeln(2, 'NOTE' )
+                text = _("Place name at the time") + " : "  + place_name
+                self._writeln(3, 'CONT', text )
         if self.placenote:
             LOG.debug("PLACENOTE")
             self._note_references(place.get_note_list(), level)
@@ -1195,6 +1207,8 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.placenote_check = None
         self.placegeneanet = CONFIG.get("preferences.placegeneanet")
         self.placegeneanet_check = None
+        self.ancplacename = CONFIG.get("preferences.ancplacename")
+        self.ancplacename_check = None
         self.inccensus = CONFIG.get("preferences.inccensus")
         self.inccensus_check = None
 
@@ -1214,6 +1228,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.inccensus_check = Gtk.CheckButton(_("Include Census information for people"))
         self.placenote_check = Gtk.CheckButton(_("Increase level of place note"))
         self.placegeneanet_check = Gtk.CheckButton(_("Geneanet format place"))
+        self.ancplacename_check = Gtk.CheckButton(_("Display place name at the time"))
         #self.include_witnesses_check.set_active(1)
         self.include_witnesses_check.set_active(CONFIG.get("preferences.include_witnesses"))
         self.include_media_check.set_active(CONFIG.get("preferences.include_media"))
@@ -1228,6 +1243,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.inccensus_check.set_active(CONFIG.get("preferences.inccensus"))
         self.placenote_check.set_active(CONFIG.get("preferences.placenote"))
         self.placegeneanet_check.set_active(CONFIG.get("preferences.placegeneanet"))
+        self.ancplacename_check.set_active(CONFIG.get("preferences.ancplacename"))
 
         # Add to gui:
         option_box.pack_start(self.include_witnesses_check, False, False, 0)
@@ -1243,6 +1259,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         option_box.pack_start(self.inccensus_check, False, False, 0)
         option_box.pack_start(self.placenote_check, False, False, 0)
         option_box.pack_start(self.placegeneanet_check, False, False, 0)
+        option_box.pack_start(self.ancplacename_check, False, False, 0)
         return option_box
 
     def parse_options(self):
@@ -1276,6 +1293,8 @@ class GedcomWriterOptionBox(WriterOptionBox):
             self.placenote = self.placenote_check.get_active()
         if self.placegeneanet_check:
             self.placegeneanet = self.placegeneanet_check.get_active()
+        if self.ancplacename_check:
+            self.ancplacename = self.ancplacename_check.get_active()
         CONFIG.set("preferences.include_witnesses" , self.include_witnesses )
         CONFIG.set("preferences.include_media" , self.include_media)
         CONFIG.set("preferences.include_depot" , self.include_depot)
@@ -1289,6 +1308,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         CONFIG.set("preferences.inccensus" , self.inccensus)
         CONFIG.set("preferences.placenote" , self.placenote)
         CONFIG.set("preferences.placegeneanet" , self.placegeneanet)
+        CONFIG.set("preferences.ancplacename" , self.ancplacename)
         CONFIG.save()
 
 def export_data(database, filename, user, option_box=None):
