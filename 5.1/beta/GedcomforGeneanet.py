@@ -197,39 +197,39 @@ class PlaceDisplayGeneanet(place.PlaceDisplay):
                     populated_place = item[0]
                 else:
                     populated_place = populated_place + " ] - " + item[0]
-                populated_place = populated_place + ","  + postal_code
+                populated_place = populated_place + ", "  + postal_code
             elif int(item[1]) in [PlaceType.COUNTY, PlaceType.DEPARTMENT ]:
                 if populated_place == "":
                     populated_place = item[0]
                 else:
                     if level == 1:
-                        populated_place = populated_place + " ] - ,," + item[0]
+                        populated_place = populated_place + " ] - ,, " + item[0]
                     else:
-                        populated_place = populated_place + "," + item[0]
+                        populated_place = populated_place + ", " + item[0]
                     level = 3
             elif int(item[1]) in [PlaceType.STATE, PlaceType.REGION , PlaceType.PROVINCE ]:
                 if populated_place == "":
                     populated_place = item[0]
                 else:
                     if level == 1:
-                        populated_place = populated_place + " ] - ,,," + item[0]
+                        populated_place = populated_place + " ] - ,,, " + item[0]
                     elif level ==  2:
-                        populated_place = populated_place + ",," + item[0]
+                        populated_place = populated_place + ",, " + item[0]
                     else:
-                         populated_place = populated_place + "," + item[0]
+                         populated_place = populated_place + ", " + item[0]
                     level = 4
             elif int(item[1]) in [PlaceType.COUNTRY ]:
                 if populated_place == "":
                     populated_place = item[0]
                 else:
                     if level == 1:
-                        populated_place = populated_place + " ] - ,,,," + item[0]
+                        populated_place = populated_place + " ] - ,,,, " + item[0]
                     elif level ==  2:
-                        populated_place = populated_place + ",,," + item[0]
+                        populated_place = populated_place + ",,, " + item[0]
                     elif level == 3:
-                        populated_place = populated_place + ",," + item[0]
+                        populated_place = populated_place + ",, " + item[0]
                     else:
-                        populated_place = populated_place + "," + item[0]
+                        populated_place = populated_place + ", " + item[0]
                     level = 5
         return populated_place
 
@@ -387,9 +387,8 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             anc_name = displayer.display(self.dbase, place, dateobj)
             if anc_name != place_name:
                 place_name = _pd.display(self.dbase, place, dateobj)
-                self._writeln(2, 'NOTE' )
                 text = _("Place name at the time") + " : "  + place_name
-                self._writeln(3, 'CONT', text )
+                self._writeln(2, 'NOTE' , text )
         if self.placenote:
             LOG.debug("PLACENOTE")
             self._note_references(place.get_note_list(), level)
