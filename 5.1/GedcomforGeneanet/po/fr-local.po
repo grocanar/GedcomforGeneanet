@@ -116,3 +116,6 @@ msgstr "Nom du lieu à la date de l événement"
 msgid "Display alternative name for place"
 msgstr "Afficher les noms alternatifs des lieux"
 
+msgid "Alternate name for place"
+msgstr "Noms alternatifs du lieu"
+
