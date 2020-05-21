@@ -109,7 +109,7 @@ CONFIG.register("preferences.nameus" , False)
 CONFIG.register("preferences.anychar", True)
 CONFIG.register("preferences.citattr", True)
 CONFIG.register("preferences.inccensus", True)
-CONFIG.register("preferences.placenote", True)
+CONFIG.register("preferences.altname", True)
 CONFIG.register("preferences.placegeneanet", True)
 CONFIG.register("preferences.ancplacename", True)
 CONFIG.load()
@@ -255,7 +255,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.anychar = option_box.anychar
             self.citattr = option_box.citattr
             self.inccensus = option_box.inccensus
-            self.placenote = option_box.placenote
+            self.altname = option_box.altname
             self.placegeneanet = option_box.placegeneanet
             self.ancplacename = option_box.ancplacename
             CONFIG.save()
@@ -272,7 +272,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.anychar = 1
             self.citattr = 1
             self.inccensus = 1
-            self.placenote = 0
+            self.altname = 0
             self.placegeneanet = 0
             self.ancplacename = 0
         self.zipfile = None
@@ -389,12 +389,25 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
                 place_name = _pd.display(self.dbase, place, dateobj)
                 text = _("Place name at the time") + " : "  + place_name
                 self._writeln(2, 'NOTE' , text )
-        if self.placenote:
-            LOG.debug("PLACENOTE")
-            self._note_references(place.get_note_list(), level)
+        if self.altname:
+            LOG.debug("ALTNOTE")
+            alt_names=self.display_alt_names(place)
+            if len(alt_names) > 0:
+                text = _("Alternate name for place\n") + '\n'.join(alt_names)
+                self._writeln(2, 'NOTE' , text )
         else:
             LOG.debug(" PAS PLACENOTE")
             self._note_references(place.get_note_list(), level + 1)
+
+    def display_alt_names(self, place):
+        """
+    Display alternative names for the place.
+    """
+        alt_names = ["%s (%s)" % (name.get_value(), name.get_language())
+                 if name.get_language() else name.get_value()
+                 for name in place.get_alternative_names()]
+        return alt_names
+
 
 
     def _names(self, person):
@@ -1202,8 +1215,8 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.anychar_check = None
         self.citattr = CONFIG.get("preferences.citattr")
         self.citattr_check = None
-        self.placenote = CONFIG.get("preferences.placenote")
-        self.placenote_check = None
+        self.altname = CONFIG.get("preferences.altname")
+        self.altname_check = None
         self.placegeneanet = CONFIG.get("preferences.placegeneanet")
         self.placegeneanet_check = None
         self.ancplacename = CONFIG.get("preferences.ancplacename")
@@ -1225,7 +1238,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.anychar_check = Gtk.CheckButton(_("Implementation of anychar"))
         self.citattr_check = Gtk.CheckButton(_("Export of attributes of citation"))
         self.inccensus_check = Gtk.CheckButton(_("Include Census information for people"))
-        self.placenote_check = Gtk.CheckButton(_("Increase level of place note"))
+        self.altname_check = Gtk.CheckButton(_("display alternative name for place"))
         self.placegeneanet_check = Gtk.CheckButton(_("Geneanet format place"))
         self.ancplacename_check = Gtk.CheckButton(_("Display place name at the time"))
         #self.include_witnesses_check.set_active(1)
@@ -1240,7 +1253,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.anychar_check.set_active(CONFIG.get("preferences.anychar"))
         self.citattr_check.set_active(CONFIG.get("preferences.citattr"))
         self.inccensus_check.set_active(CONFIG.get("preferences.inccensus"))
-        self.placenote_check.set_active(CONFIG.get("preferences.placenote"))
+        self.altname_check.set_active(CONFIG.get("preferences.altname"))
         self.placegeneanet_check.set_active(CONFIG.get("preferences.placegeneanet"))
         self.ancplacename_check.set_active(CONFIG.get("preferences.ancplacename"))
 
@@ -1256,7 +1269,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         option_box.pack_start(self.anychar_check, False, False, 0)
         option_box.pack_start(self.citattr_check, False, False, 0)
         option_box.pack_start(self.inccensus_check, False, False, 0)
-        option_box.pack_start(self.placenote_check, False, False, 0)
+        option_box.pack_start(self.altname_check, False, False, 0)
         option_box.pack_start(self.placegeneanet_check, False, False, 0)
         option_box.pack_start(self.ancplacename_check, False, False, 0)
         return option_box
@@ -1288,8 +1301,8 @@ class GedcomWriterOptionBox(WriterOptionBox):
             self.citattr = self.citattr_check.get_active()
         if self.inccensus_check:
             self.inccensus = self.inccensus_check.get_active()
-        if self.placenote_check:
-            self.placenote = self.placenote_check.get_active()
+        if self.altname_check:
+            self.altname = self.altname_check.get_active()
         if self.placegeneanet_check:
             self.placegeneanet = self.placegeneanet_check.get_active()
         if self.ancplacename_check:
@@ -1305,7 +1318,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         CONFIG.set("preferences.anychar" , self.anychar)
         CONFIG.set("preferences.citattr" , self.citattr)
         CONFIG.set("preferences.inccensus" , self.inccensus)
-        CONFIG.set("preferences.placenote" , self.placenote)
+        CONFIG.set("preferences.altname" , self.altname)
         CONFIG.set("preferences.placegeneanet" , self.placegeneanet)
         CONFIG.set("preferences.ancplacename" , self.ancplacename)
         CONFIG.save()
