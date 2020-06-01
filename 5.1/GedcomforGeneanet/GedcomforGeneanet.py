@@ -397,7 +397,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
                 self._writeln(2, 'NOTE' , text )
         else:
             LOG.debug(" PAS PLACENOTE")
-            self._note_references(place.get_note_list(), level + 1)
+        self._note_references(place.get_note_list(), level + 1)
 
     def display_alt_names(self, place):
         """
