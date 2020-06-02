@@ -393,7 +393,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             LOG.debug("ALTNOTE")
             alt_names=self.display_alt_names(place)
             if len(alt_names) > 0:
-                text = _("Alternate name for place\n") + '\n'.join(alt_names)
+                text = _("Alternate name for place") + '\n'.join(alt_names)
                 self._writeln(2, 'NOTE' , text )
         else:
             LOG.debug(" PAS PLACENOTE")
