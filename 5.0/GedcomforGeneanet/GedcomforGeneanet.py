@@ -39,14 +39,17 @@ import io
 #
 #------------------------------------------------------------------------
 from gi.repository import Gtk
+
 import gramps.plugins.lib.libgedcom as libgedcom
 from gramps.plugins.export import exportgedcom
 from gramps.gui.plug.export import WriterOptionBox
 from gramps.gen.errors import DatabaseError
-from gramps.gen.lib import (EventRoleType, FamilyRelType, Citation, EventType,\
- Person, AttributeType, NameType, NoteType)
+from gramps.gen.lib.date import Today
+from gramps.gen.lib import (EventRoleType, FamilyRelType, Citation, EventType,Date, \
+ PlaceType,Person, AttributeType, NameType, NoteType)
 from gramps.gen.const import GRAMPS_LOCALE as glocale
 from gramps.gen.utils.file import media_path_full, media_path, relative_path
+from gramps.gen.utils.location import get_location_list
 try:
     _trans = glocale.get_addon_translator(__file__)
 except ValueError:
@@ -54,8 +57,14 @@ except ValueError:
 _ = _trans.gettext
 import zipfile
 import logging
+import datetime
 from gramps.version import VERSION
 from gramps.gen.config import config
+from gramps.gen.display.place import displayer as _pd
+from gramps.gen.utils.location import get_main_location
+from gramps.gen.utils.place import conv_lat_lon
+from gramps.gen.display import place
+
 LOG = logging.getLogger("gedcomforgeneanet")
 
 
@@ -96,10 +105,13 @@ CONFIG.register("preferences.extended_role" , False)
 CONFIG.register("preferences.relativepath" , True)
 CONFIG.register("preferences.quaynote", True)
 CONFIG.register("preferences.zip", False)
-CONFIG.register("preferences.namegen" , True)
 CONFIG.register("preferences.nameus" , False)
 CONFIG.register("preferences.anychar", True)
 CONFIG.register("preferences.citattr", True)
+CONFIG.register("preferences.inccensus", True)
+CONFIG.register("preferences.altname", True)
+CONFIG.register("preferences.placegeneanet", True)
+CONFIG.register("preferences.ancplacename", True)
 CONFIG.load()
 
 #-------------------------------------------------------------------------
@@ -125,6 +137,103 @@ def sort_handles_by_id(handle_list, handle_to_object):
     return sorted_list
 
 
+class PlaceDisplayGeneanet(place.PlaceDisplay):
+    
+    def __init__(self):
+        super(PlaceDisplayGeneanet,self).__init__()
+
+    def display(self, db, place, date=None, fmt=-1):
+        if not place:
+            return ""
+        if not config.get('preferences.place-auto'):
+            return place.title
+        else:
+            if fmt == -1:
+                fmt = config.get('preferences.place-format')
+            pf = self.place_formats[fmt]
+            lang = pf.language
+            places = get_location_list(db, place, date, lang)
+            visited = [place.handle]
+            postal_code = place.get_code()
+            if not postal_code:
+                place2 =""
+                for placeref in place.placeref_list:
+                    place2 = db.get_place_from_handle(placeref.ref)
+                    if place2:
+                        postal_code = self._find_postal_code(db,place2,visited)
+                        if postal_code:
+                            break
+            return  self._find_populated_place(places,place,postal_code)
+
+    def _find_postal_code(self,db,place,visited):
+        postal_code = place.get_code()
+        if postal_code:
+            return postal_code
+        else:
+            for placeref in place.placeref_list:
+                if placeref.ref not in visited:
+                    place2 = db.get_place_from_handle(placeref.ref)
+                    if place2:
+                        visited.append(place2.handle)
+                        postal_code = self._find_postal_code(db,place2,visited)
+                        if postal_code:
+                            break
+            return postal_code
+ 
+    def _find_populated_place(self,places,place,postal_code):
+        populated_place = ""
+        level = 0
+        for index, item in enumerate(places):
+            if int(item[1]) in [PlaceType.NUMBER, PlaceType.BUILDING , PlaceType.FARM , PlaceType.HAMLET, PlaceType.NEIGHBORHOOD , PlaceType.STREET , PlaceType.PARISH , PlaceType.LOCALITY , PlaceType.BOROUGH, PlaceType.UNKNOWN]:
+                level = 1
+                if populated_place == "":
+                    populated_place = "[ " + item[0]
+                else :
+                    populated_place = populated_place + " - " + item[0] 
+            elif int(item[1]) in [PlaceType.CITY, PlaceType.VILLAGE,
+                            PlaceType.TOWN]:
+                level = 2
+                if populated_place == "":
+                    populated_place = item[0]
+                else:
+                    populated_place = populated_place + " ] - " + item[0]
+                populated_place = populated_place + ", "  + postal_code
+            elif int(item[1]) in [PlaceType.COUNTY, PlaceType.DEPARTMENT ]:
+                if populated_place == "":
+                    populated_place = item[0]
+                else:
+                    if level == 1:
+                        populated_place = populated_place + " ] - ,, " + item[0]
+                    else:
+                        populated_place = populated_place + ", " + item[0]
+                    level = 3
+            elif int(item[1]) in [PlaceType.STATE, PlaceType.REGION , PlaceType.PROVINCE ]:
+                if populated_place == "":
+                    populated_place = item[0]
+                else:
+                    if level == 1:
+                        populated_place = populated_place + " ] - ,,, " + item[0]
+                    elif level ==  2:
+                        populated_place = populated_place + ",, " + item[0]
+                    else:
+                         populated_place = populated_place + ", " + item[0]
+                    level = 4
+            elif int(item[1]) in [PlaceType.COUNTRY ]:
+                if populated_place == "":
+                    populated_place = item[0]
+                else:
+                    if level == 1:
+                        populated_place = populated_place + " ] - ,,,, " + item[0]
+                    elif level ==  2:
+                        populated_place = populated_place + ",,, " + item[0]
+                    elif level == 3:
+                        populated_place = populated_place + ",, " + item[0]
+                    else:
+                        populated_place = populated_place + ", " + item[0]
+                    level = 5
+        return populated_place
+
+
 class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
     """
     GedcomWriter forGeneanets.
@@ -142,10 +251,13 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.extended_role = option_box.extended_role
             self.quaynote = option_box.quaynote
             self.zip = option_box.zip
-            self.namegen = option_box.namegen
             self.nameus = option_box.nameus
             self.anychar = option_box.anychar
             self.citattr = option_box.citattr
+            self.inccensus = option_box.inccensus
+            self.altname = option_box.altname
+            self.placegeneanet = option_box.placegeneanet
+            self.ancplacename = option_box.ancplacename
             CONFIG.save()
         else:
             LOG.debug("pas dans OPTION %s")
@@ -156,10 +268,13 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.relativepath = 0
             self.quaynote = 0
             self.zip = 0
-            self.namegen = 0
             self.nameus = 1
             self.anychar = 1
             self.citattr = 1
+            self.inccensus = 1
+            self.altname = 0
+            self.placegeneanet = 0
+            self.ancplacename = 0
         self.zipfile = None
 
     def get_filtered_database(self, dbase, progress=None, preview=False):
@@ -209,6 +324,89 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
                              "{number_of} People", people_count
                             ).format(number_of=people_count) )
         return dbase
+
+    def _place(self, place, dateobj, level):
+        """
+        PLACE_STRUCTURE:=
+            n PLAC <PLACE_NAME> {1:1}
+            +1 FORM <PLACE_HIERARCHY> {0:1}
+            +1 FONE <PLACE_PHONETIC_VARIATION> {0:M}  # not used
+            +2 TYPE <PHONETIC_TYPE> {1:1}
+            +1 ROMN <PLACE_ROMANIZED_VARIATION> {0:M} # not used
+            +2 TYPE <ROMANIZED_TYPE> {1:1}
+            +1 MAP {0:1}
+            +2 LATI <PLACE_LATITUDE> {1:1}
+            +2 LONG <PLACE_LONGITUDE> {1:1}
+            +1 <<NOTE_STRUCTURE>> {0:M}
+        """
+        if place is None:
+            return
+       
+        if self.placegeneanet:
+            displayer=PlaceDisplayGeneanet()
+            dateobj2=Today()
+            place_name = displayer.display(self.dbase, place, dateobj2)
+        else:
+            place_name = _pd.display(self.dbase, place, dateobj)
+        self._writeln(level, "PLAC", place_name.replace('\r', ' '), limit=120)
+        longitude = place.get_longitude()
+        latitude = place.get_latitude()
+        if longitude and latitude:
+            (latitude, longitude) = conv_lat_lon(latitude, longitude, "GEDCOM")
+        if longitude and latitude:
+            self._writeln(level + 1, "MAP")
+            self._writeln(level + 2, 'LATI', latitude)
+            self._writeln(level + 2, 'LONG', longitude)
+
+        # The Gedcom standard shows that an optional address structure can
+        # be written out in the event detail.
+        # http://homepages.rootsweb.com/~pmcbride/gedcom/55gcch2.htm#EVENT_DETAIL
+        location = get_main_location(self.dbase, place)
+        street = location.get(PlaceType.STREET)
+        locality = location.get(PlaceType.LOCALITY)
+        city = location.get(PlaceType.CITY)
+        state = location.get(PlaceType.STATE)
+        country = location.get(PlaceType.COUNTRY)
+        postal_code = place.get_code()
+
+        if street or locality or city or state or postal_code or country:
+            self._writeln(level, "ADDR", street)
+            if street:
+                self._writeln(level + 1, 'ADR1', street)
+            if locality:
+                self._writeln(level + 1, 'ADR2', locality)
+            if city:
+                self._writeln(level + 1, 'CITY', city)
+            if state:
+                self._writeln(level + 1, 'STAE', state)
+            if postal_code:
+                self._writeln(level + 1, 'POST', postal_code)
+            if country:
+                self._writeln(level + 1, 'CTRY', country)
+        if self.placegeneanet and self.ancplacename:
+            anc_name = displayer.display(self.dbase, place, dateobj)
+            if anc_name != place_name:
+                place_name = _pd.display(self.dbase, place, dateobj)
+                text = _("Place name at the time") + " : "  + place_name
+                self._writeln(2, 'NOTE' , text )
+        if self.altname:
+            LOG.debug("ALTNOTE")
+            alt_names=self.display_alt_names(place)
+            if len(alt_names) > 0:
+                text = _("Alternate name for place") + '\n'.join(alt_names)
+                self._writeln(2, 'NOTE' , text )
+        else:
+            LOG.debug(" PAS PLACENOTE")
+        self._note_references(place.get_note_list(), level + 1)
+
+    def display_alt_names(self, place):
+        """
+    Display alternative names for the place.
+    """
+        alt_names = ["%s (%s)" % (name.get_value(), name.get_language())
+                 if name.get_language() else name.get_value()
+                 for name in place.get_alternative_names()]
+        return alt_names
 
 
 
@@ -392,10 +590,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
         +1 <<SOURCE_CITATION>> {0:M}
         +1 <<NOTE_STRUCTURE>> {0:M}
         """
-        if self.namegen:
-            gedcom_name = self.get_genegedcom_name(name)
-        else:
-            gedcom_name = self.get_gedcom_name(name)
+        gedcom_name = self.get_gedcom_name(name)
 
         firstname = name.get_first_name().strip()
         surns = []
@@ -536,13 +731,18 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
                 if person:
                     for ref in person.get_event_ref_list():
                         if ref.ref == event.handle:
-                            if int(ref.get_role()) in [EventRoleType.WITNESS,EventRoleType.CELEBRANT,\
-                        EventRoleType.INFORMANT,\
-                             EventRoleType.CLERGY, EventRoleType.AIDE, EventRoleType.CUSTOM]:
+                            role=int(ref.get_role())
+                            if role in [EventRoleType.WITNESS,EventRoleType.CELEBRANT, EventRoleType.INFORMANT, EventRoleType.CLERGY, EventRoleType.AIDE, EventRoleType.FAMILY, EventRoleType.CUSTOM]:
                                 level = 2
+                                rol = role + 1
                                 self._writeln(level, "ASSO", "@%s@" % person.get_gramps_id())
                                 self._writeln(level+1, "TYPE", "INDI")
                                 self._writeln(level+1, "RELA", "Witness")
+                                if self.extended_role:
+                                    if role:
+                                        self._writeln(level+1, "NOTE", '\xA0%s' % EventRoleType._DATAMAP[rol][1])
+                                    else:
+                                        self._writeln(level+1, "NOTE", '\xA0%s' % str(ref.role))
                                 self._note_references(ref.get_note_list(), level+1)
 
     def _sources(self):
@@ -576,7 +776,6 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             if self.include_depot:
                 for reporef in source.get_reporef_list():
                     self._reporef(reporef, 1)
-                    break
 
             self._note_references(source.get_note_list(), 1)
             self._change(source.get_change_time(), 1)
@@ -603,7 +802,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
                         devel = 2
                         if (ref.ref == event.handle): 
                             role = int(ref.get_role())
-                            if int(ref.get_role()) in [EventRoleType.WITNESS,EventRoleType.CELEBRANT, EventRoleType.INFORMANT, EventRoleType.AIDE ,EventRoleType.CLERGY, EventRoleType.AIDE,EventRoleType.CUSTOM]:
+                            if int(ref.get_role()) in [EventRoleType.WITNESS,EventRoleType.CELEBRANT, EventRoleType.INFORMANT, EventRoleType.AIDE ,EventRoleType.CLERGY, EventRoleType.AIDE,EventRoleType.FAMILY,EventRoleType.CUSTOM]:
                                 level = 2
                                 rol = role + 1
                                 self._writeln(level, "ASSO", "@%s@" % person.get_gramps_id())
@@ -664,7 +863,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
                         for ref in person2.get_event_ref_list():
                             if (ref.ref == event.handle):  
                                 role=int(ref.get_role())
-                                if int(ref.get_role()) in [EventRoleType.WITNESS, EventRoleType.CELEBRANT, EventRoleType.INFORMANT, EventRoleType.AIDE, EventRoleType.CLERGY, EventRoleType.AIDE, EventRoleType.CUSTOM]:
+                                if int(ref.get_role()) in [EventRoleType.WITNESS, EventRoleType.CELEBRANT, EventRoleType.INFORMANT, EventRoleType.AIDE, EventRoleType.CLERGY, EventRoleType.AIDE, EventRoleType.FAMILY, EventRoleType.CUSTOM]:
                                     level = 2
 #pylint: disable=maybe-no-member
                                     rol = role + 1
@@ -677,6 +876,79 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
                                         else:
                                             self._writeln(level+1, "NOTE", '\xA0%s' % str(ref.role))
                                     self._note_references(ref.get_note_list(), level+1)
+
+    def _dump_event_stats(self, event, event_ref):
+        """
+        Write the event details for the event, using the event and event
+        reference information.
+
+        GEDCOM does not make a distinction between the two.
+
+        """
+        dateobj = event.get_date_object()
+        self._date(2, dateobj)
+        if self._datewritten:
+            # write out TIME if present
+            times = [attr.get_value() for attr in event.get_attribute_list()
+                     if int(attr.get_type()) == AttributeType.TIME]
+            # Not legal, but inserted by PhpGedView
+            if len(times) > 0:
+                self._writeln(3, 'TIME', times[0])
+
+        place = None
+
+        if event.get_place_handle():
+            place = self.dbase.get_place_from_handle(event.get_place_handle())
+            self._place(place, dateobj, 2)
+
+        for attr in event.get_attribute_list():
+            attr_type = attr.get_type()
+            if attr_type == AttributeType.CAUSE:
+                self._writeln(2, 'CAUS', attr.get_value())
+            elif attr_type == AttributeType.AGENCY:
+                self._writeln(2, 'AGNC', attr.get_value())
+            elif attr_type == _("Phone"):
+                self._writeln(2, 'PHON', attr.get_value())
+            elif attr_type == _("FAX"):
+                self._writeln(2, 'FAX', attr.get_value())
+            elif attr_type == _("EMAIL"):
+                self._writeln(2, 'EMAIL', attr.get_value())
+            elif attr_type == _("WWW"):
+                self._writeln(2, 'WWW', attr.get_value())
+
+        resultstring = ""
+        for attr in event_ref.get_attribute_list():
+            attr_type = attr.get_type()
+            if attr_type == AttributeType.AGE:
+                self._writeln(2, 'AGE', attr.get_value())
+            elif attr_type == AttributeType.FATHER_AGE:
+                self._writeln(2, 'HUSB')
+                self._writeln(3, 'AGE', attr.get_value())
+            elif attr_type == AttributeType.MOTHER_AGE:
+                self._writeln(2, 'WIFE')
+                self._writeln(3, 'AGE', attr.get_value())
+            
+        etype = int(event.get_type())
+        if self.inccensus and etype == EventType.CENSUS:
+            attrs = event_ref.get_attribute_list()
+            if len(attrs):
+                self._writeln(2, 'NOTE' )
+                for attr in attrs:
+                    typ = str(attr.get_type())
+                    val = str(attr.get_value())
+                    LOG.debug("TYPE %s VAL %s" % ( typ , val))
+                    text = typ + " : " + val
+                    self._writeln(3,'CONT', text )
+            
+            
+
+        self._note_references(event.get_note_list(), 2)
+        self._source_references(event.get_citation_list(), 2)
+
+        self._photos(event.get_media_list(), 2)
+        if place:
+            self._photos(place.get_media_list(), 2)
+    
 
     def _attributes(self, person):
         """
@@ -937,14 +1209,20 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.quaynote_check = None
         self.zip = CONFIG.get("preferences.zip")
         self.zip_check = None
-        self.namegen = CONFIG.get("preferences.namegen")
-        self.namegen_check = None
         self.nameus = CONFIG.get("preferences.nameus")
         self.nameus_check = None
         self.anychar = CONFIG.get("preferences.anychar")
         self.anychar_check = None
         self.citattr = CONFIG.get("preferences.citattr")
         self.citattr_check = None
+        self.altname = CONFIG.get("preferences.altname")
+        self.altname_check = None
+        self.placegeneanet = CONFIG.get("preferences.placegeneanet")
+        self.placegeneanet_check = None
+        self.ancplacename = CONFIG.get("preferences.ancplacename")
+        self.ancplacename_check = None
+        self.inccensus = CONFIG.get("preferences.inccensus")
+        self.inccensus_check = None
 
     def get_option_box(self):
         option_box = super(GedcomWriterOptionBox, self).get_option_box()
@@ -956,10 +1234,13 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.extended_role_check = Gtk.CheckButton(_("Role Display for Events"))
         self.quaynote_check = Gtk.CheckButton(_("Export Source Quality"))
         self.zip_check = Gtk.CheckButton(_("Create a zip of medias"))
-        self.namegen_check = Gtk.CheckButton(_("Geneanet name beautify"))
         self.nameus_check = Gtk.CheckButton(_("Support for call name"))
         self.anychar_check = Gtk.CheckButton(_("Implementation of anychar"))
         self.citattr_check = Gtk.CheckButton(_("Export of attributes of citation"))
+        self.inccensus_check = Gtk.CheckButton(_("Include Census information for people"))
+        self.altname_check = Gtk.CheckButton(_("Display alternative name for place"))
+        self.placegeneanet_check = Gtk.CheckButton(_("Geneanet format place"))
+        self.ancplacename_check = Gtk.CheckButton(_("Display place name at the time"))
         #self.include_witnesses_check.set_active(1)
         self.include_witnesses_check.set_active(CONFIG.get("preferences.include_witnesses"))
         self.include_media_check.set_active(CONFIG.get("preferences.include_media"))
@@ -968,10 +1249,13 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.extended_role_check.set_active(CONFIG.get("preferences.extended_role"))
         self.quaynote_check.set_active(CONFIG.get("preferences.quaynote"))
         self.zip_check.set_active(CONFIG.get("preferences.zip"))
-        self.namegen_check.set_active(CONFIG.get("preferences.namegen"))
         self.nameus_check.set_active(CONFIG.get("preferences.nameus"))
         self.anychar_check.set_active(CONFIG.get("preferences.anychar"))
         self.citattr_check.set_active(CONFIG.get("preferences.citattr"))
+        self.inccensus_check.set_active(CONFIG.get("preferences.inccensus"))
+        self.altname_check.set_active(CONFIG.get("preferences.altname"))
+        self.placegeneanet_check.set_active(CONFIG.get("preferences.placegeneanet"))
+        self.ancplacename_check.set_active(CONFIG.get("preferences.ancplacename"))
 
         # Add to gui:
         option_box.pack_start(self.include_witnesses_check, False, False, 0)
@@ -981,10 +1265,13 @@ class GedcomWriterOptionBox(WriterOptionBox):
         option_box.pack_start(self.extended_role_check, False, False, 0)
         option_box.pack_start(self.quaynote_check, False, False, 0)
         option_box.pack_start(self.zip_check, False, False, 0)
-        option_box.pack_start(self.namegen_check, False, False, 0)
         option_box.pack_start(self.nameus_check, False, False, 0)
         option_box.pack_start(self.anychar_check, False, False, 0)
         option_box.pack_start(self.citattr_check, False, False, 0)
+        option_box.pack_start(self.inccensus_check, False, False, 0)
+        option_box.pack_start(self.altname_check, False, False, 0)
+        option_box.pack_start(self.placegeneanet_check, False, False, 0)
+        option_box.pack_start(self.ancplacename_check, False, False, 0)
         return option_box
 
     def parse_options(self):
@@ -1006,14 +1293,20 @@ class GedcomWriterOptionBox(WriterOptionBox):
             self.quaynote = self.quaynote_check.get_active()
         if self.zip_check:
             self.zip = self.zip_check.get_active()
-        if self.namegen_check:
-            self.namegen = self.namegen_check.get_active()
         if self.nameus_check:
             self.nameus = self.nameus_check.get_active()
         if self.anychar_check:
             self.anychar = self.anychar_check.get_active()
         if self.citattr_check:
             self.citattr = self.citattr_check.get_active()
+        if self.inccensus_check:
+            self.inccensus = self.inccensus_check.get_active()
+        if self.altname_check:
+            self.altname = self.altname_check.get_active()
+        if self.placegeneanet_check:
+            self.placegeneanet = self.placegeneanet_check.get_active()
+        if self.ancplacename_check:
+            self.ancplacename = self.ancplacename_check.get_active()
         CONFIG.set("preferences.include_witnesses" , self.include_witnesses )
         CONFIG.set("preferences.include_media" , self.include_media)
         CONFIG.set("preferences.include_depot" , self.include_depot)
@@ -1021,10 +1314,13 @@ class GedcomWriterOptionBox(WriterOptionBox):
         CONFIG.set("preferences.relativepath" , self.relativepath)
         CONFIG.set("preferences.quaynote" , self.quaynote)
         CONFIG.set("preferences.zip" , self.zip)
-        CONFIG.set("preferences.namegen" , self.namegen)
         CONFIG.set("preferences.nameus" , self.nameus)
         CONFIG.set("preferences.anychar" , self.anychar)
         CONFIG.set("preferences.citattr" , self.citattr)
+        CONFIG.set("preferences.inccensus" , self.inccensus)
+        CONFIG.set("preferences.altname" , self.altname)
+        CONFIG.set("preferences.placegeneanet" , self.placegeneanet)
+        CONFIG.set("preferences.ancplacename" , self.ancplacename)
         CONFIG.save()
 
 def export_data(database, filename, user, option_box=None):
