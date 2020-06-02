@@ -19,14 +19,16 @@ Ce greffon est une "amélioration" de l'export gedcom de Geneanet. Il apporte le
 * Export des informations de recensement d'un individu
 * Export des lieux au format geneanet
 * Indication du nom du lieu à la date de l'événement
+* Indication des noms alternatifs des lieux
 
 
 ## Installation
 
-Pour utiliser ce greffons il faut télécharger le fichier zip de la version souhaité et 
+Pour utiliser ce greffons il faut télécharger le fichier zip de la version souhaitée (avec XX = 42, 50, …) et
 
-* Sous unix dezipper le fichier dans le répertoire $HOME/.gramps/gramps42/plugins/
-* Sous Windows deippter le fichiers dans le répertoire C:\Users\<~username>\AppData\Roaming\gramps\gramps42\plugins
+* Sous unix dezipper le fichier dans le répertoire $HOME/.gramps/grampsXX/plugins/
+* Sous Windows dezipper le fichiers dans le répertoire %USERPROFILE%\<~username>\AppData\Roaming\gramps\grampsXX\plugins
+  En général la variable %USERPROFILE% vaut C:\Users
 
 ## Fonctionnalités
 
@@ -39,7 +41,7 @@ Pour les baptèmes Si vous avez défini un role CUSTOM la personne de sexe mascu
 #### Témoins et rôle.
 
 Pour les évenements individuels hors baptème tous les rôles sont assimilés à des témoins au vu de la pauvreté de la norme GEDCOM. 
-Néanmoins l'option extend_role permet d'afficher le role mais celui sera alors sur deux lignes 
+Néanmoins l'option extend_role permet d'afficher le role mais celui sera alors sur deux lignes.
 
 ### Gestion des relations non maritales
 Pour les couples non mariés leur statut n'est plus mariés. 
@@ -55,7 +57,7 @@ Cela permet de supprimer en général une information utilisateur dans le fichie
 
 ### Suppression de l'attribut "ID Gramps fusionné"
 
-Cet attribut n'ayant pas d'intérêt celui est supprimé durant l'export
+Cet attribut n'ayant pas d'intérêt celui est supprimé durant l'export.
 
 ### Suppression du support de la norme anychar du Gedcom 5.5
 
@@ -64,18 +66,22 @@ Geneanet n'implemente pas la norme anychar de la norme Gedcom5.3 qui impose de d
 
 ### Gestion des noms usuels
 
-Permet d'exporter le prénom usuel en l'indiquant entre "
+Permet d'exporter le prénom usuel en l'indiquant entre ".
 
 ### Export des attributs des citations
 
-Permet d'exporter les attributs d'une citation. Cela permet par exemple d'indiquer l'url d'un acte
+Permet d'exporter les attributs d'une citation. Cela permet par exemple d'indiquer l'url d'un acte.
 
 ### Export des informations de recensement d'un individu
 
 Permet d'exporter pour un individu les informations dans un recensement sous formes de notes d'évenement.
 ###  Export des lieux au format geneanet
-Geneanet impose un format pour les noms des lieux non compatible avec gramps. Cet option permet de generer le titre au format geneanet lors de l'export tout en conservant la génération automatique du titre dans GRAMPS
+Geneanet impose un format pour les noms des lieux non compatible avec gramps. Cet option permet de generer le titre au format geneanet lors de l'export tout en conservant la génération automatique du titre dans GRAMPS.
 
 ### Indication du nom du lieu à la date de l'événement
 
 Indique en note le nom du lieu à la date de l'événement.
+
+### Indication des noms alternatifs des lieux
+
+Indique en note les noms alternatifs du lieu.
