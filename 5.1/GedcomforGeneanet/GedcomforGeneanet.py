@@ -192,7 +192,7 @@ class PlaceDisplayGeneanet(place.PlaceDisplay):
                 else :
                     populated_place = populated_place + " - " + item[0] 
             elif int(item[1]) in [PlaceType.CITY, PlaceType.VILLAGE,
-                            PlaceType.TOWN]:
+                            PlaceType.TOWN , PlaceType.MUNICIPALITY]:
                 level = 2
                 if populated_place == "":
                     populated_place = item[0]
@@ -1043,9 +1043,9 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
         rname = self.dbase.get_researcher().get_name()
         LOG.debug("deb header %d" % self.relativepath)
         self._writeln(0, "HEAD")
-        self._writeln(1, "SOUR", "Gramps")
+        self._writeln(1, "SOUR", "Gramps + GedcomforGeneanet")
         self._writeln(2, "VERS", VERSION)
-        self._writeln(2, "NAME", "Gramps")
+        self._writeln(2, "NAME", "Gramps + Gedcomforgeneanet")
         self._writeln(1, "DATE", date_str)
         self._writeln(2, "TIME", time_str)
         self._writeln(1, "SUBM", "@SUBM@")
