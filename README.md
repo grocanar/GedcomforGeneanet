@@ -20,6 +20,7 @@ Ce greffon est une "amélioration" de l'export gedcom de Geneanet. Il apporte le
 * Export des lieux au format geneanet
 * Indication du nom du lieu à la date de l'événement
 * Indication des noms alternatifs des lieux
+* Suppression de la structure adresse optionnelle
 
 
 ## Installation
@@ -85,3 +86,7 @@ Indique en note le nom du lieu à la date de l'événement.
 ### Indication des noms alternatifs des lieux
 
 Indique en note les noms alternatifs du lieu.
+
+### Suppression de la structure adresse optionnelle
+
+La norme Gedcom permet l'inclusion d'une structure adresse optioennelle pour les lieux. Mais cela entraine un souci lors de l'importation geneanet. 
