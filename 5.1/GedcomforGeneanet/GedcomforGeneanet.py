@@ -113,6 +113,7 @@ CONFIG.register("preferences.inccensus", True)
 CONFIG.register("preferences.altname", True)
 CONFIG.register("preferences.placegeneanet", True)
 CONFIG.register("preferences.ancplacename", True)
+CONFIG.register("preferences.optadress", False)
 CONFIG.load()
 
 #-------------------------------------------------------------------------
@@ -260,6 +261,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.altname = option_box.altname
             self.placegeneanet = option_box.placegeneanet
             self.ancplacename = option_box.ancplacename
+            self.optadress = option_box.optadress
             CONFIG.save()
         else:
             LOG.debug("pas dans OPTION %s")
@@ -278,6 +280,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
             self.altname = 0
             self.placegeneanet = 0
             self.ancplacename = 0
+            self.optadress = 0
         self.zipfile = None
 
     def get_filtered_database(self, dbase, progress=None, preview=False):
@@ -356,6 +359,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
         latitude = place.get_latitude()
         if longitude and latitude:
             (latitude, longitude) = conv_lat_lon(latitude, longitude, "GEDCOM")
+    
         if longitude and latitude:
             self._writeln(level + 1, "MAP")
             self._writeln(level + 2, 'LATI', latitude)
@@ -372,7 +376,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
         country = location.get(PlaceType.COUNTRY)
         postal_code = place.get_code()
 
-        if street or locality or city or state or postal_code or country:
+        if self.optadress and ( street or locality or city or state or postal_code or country):
             self._writeln(level, "ADDR", street)
             if street:
                 self._writeln(level + 1, 'ADR1', street)
@@ -1230,6 +1234,8 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.placegeneanet_check = None
         self.ancplacename = CONFIG.get("preferences.ancplacename")
         self.ancplacename_check = None
+        self.optadress = CONFIG.get("preferences.optadress")
+        self.optadress_check = None
         self.inccensus = CONFIG.get("preferences.inccensus")
         self.inccensus_check = None
 
@@ -1251,6 +1257,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.altname_check = Gtk.CheckButton(_("Display alternative name for place"))
         self.placegeneanet_check = Gtk.CheckButton(_("Geneanet format place"))
         self.ancplacename_check = Gtk.CheckButton(_("Display place name at the time"))
+        self.optadress_check = Gtk.CheckButton(_("Fix optionnal address structure"))
         #self.include_witnesses_check.set_active(1)
         self.include_witnesses_check.set_active(CONFIG.get("preferences.include_witnesses"))
         self.include_media_check.set_active(CONFIG.get("preferences.include_media"))
@@ -1267,6 +1274,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         self.altname_check.set_active(CONFIG.get("preferences.altname"))
         self.placegeneanet_check.set_active(CONFIG.get("preferences.placegeneanet"))
         self.ancplacename_check.set_active(CONFIG.get("preferences.ancplacename"))
+        self.optadress_check.set_active(CONFIG.get("preferences.optadress"))
 
         # Add to gui:
         option_box.pack_start(self.include_witnesses_check, False, False, 0)
@@ -1284,6 +1292,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         option_box.pack_start(self.altname_check, False, False, 0)
         option_box.pack_start(self.placegeneanet_check, False, False, 0)
         option_box.pack_start(self.ancplacename_check, False, False, 0)
+        option_box.pack_start(self.optadress_check, False, False, 0)
         return option_box
 
     def parse_options(self):
@@ -1321,6 +1330,8 @@ class GedcomWriterOptionBox(WriterOptionBox):
             self.placegeneanet = self.placegeneanet_check.get_active()
         if self.ancplacename_check:
             self.ancplacename = self.ancplacename_check.get_active()
+        if self.optadress_check:
+            self.optadress = self.optadress_check.get_active()
         CONFIG.set("preferences.include_witnesses" , self.include_witnesses )
         CONFIG.set("preferences.include_media" , self.include_media)
         CONFIG.set("preferences.include_depot" , self.include_depot)
@@ -1336,6 +1347,7 @@ class GedcomWriterOptionBox(WriterOptionBox):
         CONFIG.set("preferences.altname" , self.altname)
         CONFIG.set("preferences.placegeneanet" , self.placegeneanet)
         CONFIG.set("preferences.ancplacename" , self.ancplacename)
+        CONFIG.set("preferences.optadress" , self.optadress)
         CONFIG.save()
 
 def export_data(database, filename, user, option_box=None):
