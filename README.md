@@ -89,4 +89,4 @@ Indique en note les noms alternatifs du lieu.
 
 ### Suppression de la structure adresse optionnelle
 
-La norme Gedcom permet l'inclusion d'une structure adresse optioennelle pour les lieux. Mais cela entraine un souci lors de l'importation geneanet. 
+La norme Gedcom permet l'inclusion d'une structure adresse optioennelle pour les lieux. C'est le focntionnement par défaut de GRAMPS. Mais cela entraine un souci lors de l'importation geneanet. 
