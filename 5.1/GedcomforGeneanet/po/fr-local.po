@@ -119,3 +119,6 @@ msgstr "Afficher les noms alternatifs des lieux"
 msgid "Alternate name for place"
 msgstr "Noms alternatifs du lieu"
 
+msgid "Add optionnal address structure"
+msgstr "Ajoute la structure adresse optionnelle"
+
