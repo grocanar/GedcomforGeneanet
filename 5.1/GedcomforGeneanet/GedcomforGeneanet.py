@@ -1046,11 +1046,11 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
         time_str = "%02d:%02d:%02d" % (hour, minutes, sec)
         rname = self.dbase.get_researcher().get_name()
         LOG.debug("deb header %d" % self.relativepath)
-        VERS2 = VERSION + "-2.0.8"
+        VERS2 = VERSION + "-GedcomforGeneanet-2.0.11"
         self._writeln(0, "HEAD")
-        self._writeln(1, "SOUR", "Gramps + GedcomforGeneanet")
+        self._writeln(1, "SOUR", "Gramps" )
         self._writeln(2, "VERS", VERS2)
-        self._writeln(2, "NAME", "Gramps + Gedcomforgeneanet")
+        self._writeln(2, "NAME", "Gramps")
         self._writeln(1, "DATE", date_str)
         self._writeln(2, "TIME", time_str)
         self._writeln(1, "SUBM", "@SUBM@")
