@@ -1056,7 +1056,7 @@ class GedcomWriterforGeneanet(exportgedcom.GedcomWriter):
         self._writeln(1, "SUBM", "@SUBM@")
         if self.relativepath:
             filenam = os.path.basename(filename)
-            self._writeln(1, "FILE2", filenam, limit=255)
+            self._writeln(1, "FILE", filenam, limit=255)
         else:
             self._writeln(1, "FILE", filename, limit=255)
         self._writeln(1, "COPR", 'Copyright (c) %d %s.' % (year, rname))
