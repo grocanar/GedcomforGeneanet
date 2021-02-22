@@ -28,8 +28,7 @@ Ce greffon est une "amélioration" de l'export gedcom de Geneanet. Il apporte le
 Pour utiliser ce greffons il faut télécharger le fichier zip de la version souhaitée (avec XX = 42, 50, …) et
 
 * Sous unix dezipper le fichier dans le répertoire $HOME/.gramps/grampsXX/plugins/
-* Sous Windows dezipper le fichiers dans le répertoire %USERPROFILE%\<~username>\AppData\Roaming\gramps\grampsXX\plugins
-  En général la variable %USERPROFILE% vaut C:\Users
+* Sous Windows dezipper le fichier dans le répertoire %APPDATA%\gramps\grampsXX\plugins (APPDATA vaut par défaut C:\USER%USERNAME%\AppData\Roaming avec %USERNAME% le nom de l'utilisateur sous Windows 10)
 
 ## Fonctionnalités
 
