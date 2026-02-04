@@ -4,7 +4,7 @@ Warning
 Ce dépot est obsolete
 utilisez le depot (./https://github.com/grocanar/glopglop-addons) pour les binaires
 et
-[https://github.com/grocanar/glopglop-addons-sources) pour les binaire
+[https://github.com/grocanar/glopglop-addons-sources) pour les sources.
 
 # Greffons GedcomforGeneanet
 
@@ -86,7 +86,7 @@ Permet d'exporter pour un individu les informations dans un recensement sous for
 ###  Export des lieux au format geneanet
 Geneanet impose un format pour les noms des lieux non compatible avec gramps. Cet option permet de generer le titre au format geneanet lors de l'export tout en conservant la génération automatique du titre dans GRAMPS.
 
-### Indication du nom du lieu à la date de l'événement
+### Afficher le nom du lieu à la date de l'événement
 
 Indique en note le nom du lieu à la date de l'événement.
 
